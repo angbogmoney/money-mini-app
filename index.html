@@ -378,7 +378,7 @@ function screenHome(c, M){
 
   return '<section class="screen ' + (tab==='home'?'on':'') + '">' +
     '<div class="top"><span class="month">' + esc(M.label) + ' · осталось ' + left + ' ' + plural(left,'день','дня','дней') + '</span>' +
-      '<button class="icon-btn" onclick="openReserves()" aria-label="Отложено"><svg width="17" height="17" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.5" stroke="#14120F" stroke-width="1.6"/><path d="M10 2.5a7.5 7.5 0 0 1 7.5 7.5H10z" fill="#14120F"/></svg></button></div>' +
+      '<button class="icon-btn" onclick="openSettings()" aria-label="Настройки"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#14120F" stroke-width="1.7" stroke-linecap="round"><path d="M3 6h5M12 6h5M3 14h9M16 14h1"/><circle cx="10" cy="6" r="2" fill="#FFF"/><circle cx="14" cy="14" r="2" fill="#FFF"/></svg></button></div>' +
 
     '<div class="hero">' +
       '<div class="lbl">Свободно</div>' +
@@ -414,7 +414,7 @@ function screenHome(c, M){
         c.pending > 0 ? 'С учётом ожидаемых — ' + m(c.income + c.pending) : '') +
       barLine('Потратила', c.expense, M.expenseLimit, 'var(--out)', pace,
         c.planned > 0 ? 'С учётом запланированных — ' + m(c.expense + c.planned)
-                      : (c.expense/M.expenseLimit > pace ? 'Идёшь быстрее лимита' : 'Идёшь в темпе')) +
+                      : (!M.expenseLimit ? '' : (c.expense/M.expenseLimit > pace ? 'Идёшь быстрее лимита' : 'Идёшь в темпе'))) +
     '</div>' +
 
     '<div class="sect">Последние операции<button class="link" onclick="go(\'history\')">Все</button></div>' +
@@ -448,6 +448,15 @@ function monthIn(){
 }
 
 function barLine(name, val, goal, color, pace, note){
+  if (!goal) {
+    return '<div class="line">' +
+      '<div class="head"><span class="n">' + name + '</span>' +
+        '<span class="g">' + m(val) + '</span></div>' +
+      '<div class="bar"></div>' +
+      '<button class="note" onclick="openSettings()" style="text-align:left;color:var(--wait)">' +
+        'Задать ' + (name === 'Заработала' ? 'план' : 'лимит') + ' в настройках ›</button>' +
+    '</div>';
+  }
   var p = Math.min(val/goal, 1);
   return '<div class="line">' +
     '<div class="head"><span class="n">' + name + '</span>' +
