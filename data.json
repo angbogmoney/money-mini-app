@@ -1,0 +1,18 @@
+{
+  "currency": "₽",
+  "month": {
+    "label": "Сентябрь",
+    "dayToday": 21,
+    "daysTotal": 30,
+    "incomePlan": 100000,
+    "expenseLimit": 60000
+  },
+  "accounts": 0,
+  "operations": [],
+  "reserves": [],
+  "debts": [],
+  "presets": [],
+  "sources": ["Съёмки", "Реклама", "ТМ"],
+  "categories": ["Продукты", "Кафе", "Красота", "Такси", "Дом"],
+  "workCategories": ["Такси на съёмку", "Реквизит", "Локация"]
+}
