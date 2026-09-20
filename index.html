@@ -211,7 +211,21 @@ if (TG) { try { TG.ready(); TG.expand(); } catch(e){} }
 
 /* ============ утилиты ============ */
 var CUR = '₽';
-function money(n){ return Math.round(n).toLocaleString('ru-RU').replace(/,/g,' '); }
+function r2(n){ return Math.round((Number(n) || 0) * 100) / 100; }
+function money(n){
+  var v = r2(n);
+  var cents = Math.abs(Math.round(v * 100) % 100) > 0;
+  return v.toLocaleString('ru-RU', {
+    minimumFractionDigits: cents ? 2 : 0,
+    maximumFractionDigits: 2
+  }).replace(/\u00A0/g, ' ');
+}
+function parseMoney(v){
+  var s = String(v).replace(/\s/g,'').replace(',', '.').replace(/[^\d.]/g,'');
+  var parts = s.split('.');
+  if (parts.length > 2) s = parts[0] + '.' + parts.slice(1).join('');
+  return r2(parseFloat(s) || 0);
+}
 function m(n){ return money(n) + ' ' + CUR; }
 function dayLabel(iso){
   var mo = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
@@ -311,14 +325,14 @@ function stub(){
 /* ============ расчёты ============ */
 function calc(){
   var ops = D.operations;
-  var sum = function(f){ return ops.filter(f).reduce(function(a,o){ return a + o.amount; }, 0); };
+  var sum = function(f){ return r2(ops.filter(f).reduce(function(a,o){ return a + o.amount; }, 0)); };
 
   var income   = sum(function(o){ return o.type === 'income'; });
   var expense  = sum(function(o){ return o.type === 'expense'; });
   var pending  = sum(function(o){ return o.type === 'pending' && o.status !== 'done'; });
   var toReturn = sum(function(o){ return o.type === 'work' && o.status !== 'done'; });
   var planned  = sum(function(o){ return o.type === 'planned' && o.status !== 'done'; });
-  var reserved = (D.reserves||[]).reduce(function(a,r){ return a + r.amount; }, 0);
+  var reserved = r2((D.reserves||[]).reduce(function(a,r){ return a + r.amount; }, 0));
 
   return {
     income: income, expense: expense, pending: pending, toReturn: toReturn,
@@ -326,17 +340,18 @@ function calc(){
     plannedCount: ops.filter(function(o){ return o.type==='planned' && o.status!=='done'; }).length,
     pendingCount:  ops.filter(function(o){ return o.type==='pending' && o.status!=='done'; }).length,
     returnCount:   ops.filter(function(o){ return o.type==='work'    && o.status!=='done'; }).length,
-    accounts: D.accounts,
-    free: D.accounts - reserved - planned
+    accounts: r2(D.accounts),
+    free: r2(D.accounts - reserved - planned)
   };
 }
 function debts(){
   var list = (D.debts || []);
-  var initial = list.reduce(function(a,x){ return a + x.initial; }, 0);
-  var left    = list.reduce(function(a,x){ return a + x.remaining; }, 0);
-  var paidNow = D.operations.filter(function(o){ return o.type === 'debt'; })
-                  .reduce(function(a,o){ return a + o.amount; }, 0);
-  return { list:list, initial:initial, left:left, closed:initial - left,
+  var initial = r2(list.reduce(function(a,x){ return a + x.initial; }, 0));
+  var left    = r2(list.reduce(function(a,x){ return a + x.remaining; }, 0));
+  var paidNow = r2(D.operations.filter(function(o){ return o.type === 'debt'; })
+                  .reduce(function(a,o){ return a + o.amount; }, 0));
+  return { list:list, initial:initial, left:left,
+           closed: r2(initial - left),
            share: initial ? (initial - left) / initial : 0, paidNow: paidNow,
            active: list.filter(function(x){ return x.remaining > 0; }).length };
 }
@@ -497,10 +512,10 @@ function screenHistory(){
 }
 function delOp(id){
   var o = find(id); if (!o) return;
-  if (o.type === 'income') D.accounts -= o.amount;
-  if (o.type === 'expense' || o.type === 'work' || o.type === 'debt') D.accounts += o.amount;
+  if (o.type === 'income') D.accounts = r2(D.accounts - o.amount);
+  if (o.type === 'expense' || o.type === 'work' || o.type === 'debt') D.accounts = r2(D.accounts + o.amount);
   if (o.type === 'debt' && o.debtId) {
-    (D.debts||[]).forEach(function(x){ if (x.id === o.debtId) x.remaining = Math.min(x.initial, x.remaining + o.amount); });
+    (D.debts||[]).forEach(function(x){ if (x.id === o.debtId) x.remaining = r2(Math.min(x.initial, x.remaining + o.amount)); });
   }
   D.operations = D.operations.filter(function(x){ return x.id !== id; });
   haptic(); render(); toast('Удалено');
@@ -534,13 +549,13 @@ function screenStats(c){
 }
 function sumWork(st){
   return D.operations.filter(function(o){ return o.type==='work' && o.status===st; })
-    .reduce(function(a,o){ return a + o.amount; }, 0);
+    .reduce(function(a,o){ return r2(a + o.amount); }, 0);
 }
 function group(filter, key, total){
   var map = {};
   D.operations.filter(filter).forEach(function(o){
     var k = o[key] || 'Другое';
-    map[k] = (map[k] || 0) + o.amount;
+    map[k] = r2((map[k] || 0) + o.amount);
   });
   var keys = Object.keys(map).sort(function(a,b){ return map[b] - map[a]; });
   if (!keys.length || !total) return '';
@@ -605,7 +620,7 @@ function markSpent(id){
   o.status = 'done';
   D.operations.push({ id:'n'+Date.now(), type:'expense', title:o.title, category:o.category,
     amount:o.amount, date:today() });
-  D.accounts -= o.amount;
+  D.accounts = r2(D.accounts - o.amount);
   haptic('medium'); closeSub(); render(); toast('Оплачено ' + m(o.amount));
 }
 
@@ -614,7 +629,7 @@ function toggleNewDebt(){ newDebtOpen = !newDebtOpen; haptic(); openDebts(); }
 function createDebt(){
   var n = document.getElementById('ndname'), a = document.getElementById('ndsum');
   var title = n ? n.value.trim() : '';
-  var sum = a ? parseInt(String(a.value).replace(/[^\d]/g,''), 10) : 0;
+  var sum = a ? parseMoney(a.value) : 0;
   if (!title || !sum) return;
   if (!D.debts) D.debts = [];
   D.debts.push({ id:'d'+Date.now(), title:title, initial:sum, remaining:sum, note:'' });
@@ -649,7 +664,7 @@ function openDebts(){
 
   var form = newDebtOpen
     ? '<div class="card"><div class="tinput" style="box-shadow:none;background:#F7F3ED"><input id="ndname" placeholder="Название долга"></div>' +
-      '<div class="tinput" style="box-shadow:none;background:#F7F3ED;margin-top:8px"><input id="ndsum" inputmode="numeric" placeholder="Сколько осталось"></div>' +
+      '<div class="tinput" style="box-shadow:none;background:#F7F3ED;margin-top:8px"><input id="ndsum" inputmode="decimal" placeholder="Сколько осталось"></div>' +
       '<button class="done-btn" onclick="createDebt()" style="background:var(--ink);color:#fff">Добавить долг</button>' +
       '<button class="ghost" onclick="toggleNewDebt()" style="margin-top:4px">Отмена</button></div>'
     : '<button class="addbtn" onclick="toggleNewDebt()">+ Добавить долг</button>';
@@ -677,11 +692,11 @@ function openSettings(){
       '<div class="flabel" style="margin-top:0">Месяц</div>' +
       '<div class="tinput soft"><input id="stMonth" value="' + esc(M.label) + '"></div>' +
       '<div class="flabel">Сколько сейчас на счетах</div>' +
-      '<div class="tinput soft"><input id="stAcc" inputmode="numeric" value="' + D.accounts + '"></div>' +
+      '<div class="tinput soft"><input id="stAcc" inputmode="decimal" value="' + D.accounts + '"></div>' +
       '<div class="flabel">План по доходу на месяц</div>' +
-      '<div class="tinput soft"><input id="stPlan" inputmode="numeric" value="' + M.incomePlan + '"></div>' +
+      '<div class="tinput soft"><input id="stPlan" inputmode="decimal" value="' + M.incomePlan + '"></div>' +
       '<div class="flabel">Лимит личных трат</div>' +
-      '<div class="tinput soft"><input id="stLimit" inputmode="numeric" value="' + M.expenseLimit + '"></div>' +
+      '<div class="tinput soft"><input id="stLimit" inputmode="decimal" value="' + M.expenseLimit + '"></div>' +
       '<button class="done-btn" onclick="saveSettings()" style="background:var(--ink);color:#fff;margin-top:14px">Сохранить</button>' +
     '</div>' +
 
@@ -697,7 +712,7 @@ function openSettings(){
 
 function saveSettings(){
   var g = function(id){ var e = document.getElementById(id); return e ? e.value : ''; };
-  var num = function(v){ return parseInt(String(v).replace(/[^\d-]/g,''), 10) || 0; };
+  var num = parseMoney;
   D.month.label        = g('stMonth').trim() || D.month.label;
   D.accounts           = num(g('stAcc'));
   D.month.incomePlan   = num(g('stPlan')) || D.month.incomePlan;
@@ -719,7 +734,7 @@ function openReserves(){
 
   var form = newResOpen
     ? '<div class="card"><div class="tinput soft"><input id="nrname" placeholder="На что откладываешь"></div>' +
-      '<div class="tinput soft" style="margin-top:8px"><input id="nrsum" inputmode="numeric" placeholder="Сколько"></div>' +
+      '<div class="tinput soft" style="margin-top:8px"><input id="nrsum" inputmode="decimal" placeholder="Сколько"></div>' +
       '<button class="done-btn" onclick="createReserve()" style="background:var(--ink);color:#fff">Отложить</button>' +
       '<button class="ghost" onclick="toggleNewRes()" style="margin-top:4px">Отмена</button></div>'
     : '<button class="addbtn" onclick="toggleNewRes()">+ Отложить на цель</button>';
@@ -732,7 +747,7 @@ function toggleNewRes(){ newResOpen = !newResOpen; haptic(); openReserves(); }
 function createReserve(){
   var n = document.getElementById('nrname'), a = document.getElementById('nrsum');
   var title = n ? n.value.trim() : '';
-  var sum = a ? parseInt(String(a.value).replace(/[^\d]/g,''), 10) : 0;
+  var sum = a ? parseMoney(a.value) : 0;
   if (!title || !sum) return;
   if (!D.reserves) D.reserves = [];
   D.reserves.push({ id:'r'+Date.now(), title:title, amount:sum });
@@ -748,13 +763,13 @@ function markPaid(id){
   o.status = 'done';
   D.operations.push({ id:'n'+Date.now(), type:'income', title:o.title, source:o.source,
     amount:o.amount, date:today() });
-  D.accounts += o.amount;
+  D.accounts = r2(D.accounts + o.amount);
   haptic('medium'); closeSub(); render(); toast('Зачислено ' + m(o.amount));
 }
 function markReturned(id){
   var o = find(id); if (!o) return;
   o.status = 'done';
-  D.accounts += o.amount;
+  D.accounts = r2(D.accounts + o.amount);
   haptic('medium'); closeSub(); render(); toast('Возврат ' + m(o.amount));
 }
 function find(id){
@@ -814,7 +829,7 @@ function stepAmount(){
   var t = TYPES[draft.type];
   return '<h2>' + t.name + '</h2>' +
     '<div class="amount">' +
-      '<input id="amt" inputmode="numeric" placeholder="0" value="' + esc(draft.amount) + '" oninput="onAmount(this.value)">' +
+      '<input id="amt" inputmode="decimal" placeholder="0" value="' + esc(draft.amount) + '" oninput="onAmount(this.value)">' +
       '<div class="cap">' + (draft.type==='pending' ? 'сумма будущей выплаты'
         : (draft.type==='planned' ? 'сумма будущей траты'
         : (draft.type==='debt' ? 'сколько вносишь' : 'сумма в ' + CUR))) + '</div>' +
@@ -888,7 +903,7 @@ function keepTitle(){
   if (el) draft.title = el.value;
 }
 function onAmount(v){
-  draft.amount = v.replace(/[^\d]/g,'');
+  draft.amount = v.replace(/[^\d.,]/g,'');
   var b = document.getElementById('save');
   if (b) b.disabled = !canSave();
 }
@@ -900,7 +915,7 @@ function usePreset(id){
   haptic(); drawSheet();
 }
 function save(){
-  var amount = parseInt(draft.amount, 10);
+  var amount = parseMoney(draft.amount);
   if (!amount) return;
   var t = TYPES[draft.type];
   var op = { id:'n'+Date.now(), type:draft.type, amount:amount, date:today(),
@@ -912,10 +927,10 @@ function save(){
   if (draft.type === 'debt') {
     var dd = null;
     (D.debts||[]).forEach(function(y){ if (y.id === draft.debtId) dd = y; });
-    if (dd) dd.remaining = Math.max(0, dd.remaining - amount);
+    if (dd) dd.remaining = r2(Math.max(0, dd.remaining - amount));
     op.debtId = draft.debtId;
     op.category = 'Долги';
-    D.accounts -= amount;
+    D.accounts = r2(D.accounts - amount);
     D.operations.push(op);
     haptic('medium'); closeSheet(); render();
     toast(dd && dd.remaining === 0 ? 'Долг закрыт' : 'Минус ' + m(amount) + ' из долга');
@@ -924,9 +939,9 @@ function save(){
   }
 
   D.operations.push(op);
-  if (draft.type === 'income')  D.accounts += amount;
-  if (draft.type === 'expense') D.accounts -= amount;
-  if (draft.type === 'work')    D.accounts -= amount;
+  if (draft.type === 'income')  D.accounts = r2(D.accounts + amount);
+  if (draft.type === 'expense') D.accounts = r2(D.accounts - amount);
+  if (draft.type === 'work')    D.accounts = r2(D.accounts - amount);
 
   haptic('medium'); closeSheet(); render();
   toast(t.name + ' · ' + m(amount));
