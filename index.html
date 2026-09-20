@@ -148,6 +148,8 @@ h1.big{font-size:27px;font-weight:800;letter-spacing:-.4px;margin:6px 0 18px}
 .sub .bar-top .ttl{font-size:22px;font-weight:800;letter-spacing:-.4px}
 .backbar{position:fixed;left:0;right:0;bottom:0;z-index:62;padding:14px 18px calc(16px + var(--safe-b));
   background:linear-gradient(to top,var(--bg) 62%,rgba(250,246,241,0));pointer-events:none}
+.sub.kb .backbar{display:none}
+.sub.kb .inner{padding-bottom:40px}
 .backbar button{pointer-events:auto;display:block;width:100%;max-width:484px;margin:0 auto;padding:17px;
   border-radius:18px;background:var(--ink);color:#fff;font-size:16px;font-weight:700;
   box-shadow:0 6px 20px rgba(20,18,15,.20)}
@@ -690,13 +692,13 @@ function openSettings(){
   var body =
     '<div class="card">' +
       '<div class="flabel" style="margin-top:0">Месяц</div>' +
-      '<div class="tinput soft"><input id="stMonth" value="' + esc(M.label) + '"></div>' +
+      '<div class="tinput soft"><input id="stMonth" enterkeyhint="done" onkeydown="if(event.key===\'Enter\'){event.preventDefault();saveSettings();}" value="' + esc(M.label) + '"></div>' +
       '<div class="flabel">Сколько сейчас на счетах</div>' +
-      '<div class="tinput soft"><input id="stAcc" inputmode="decimal" value="' + D.accounts + '"></div>' +
+      '<div class="tinput soft"><input id="stAcc" inputmode="decimal" enterkeyhint="done" onkeydown="if(event.key===\'Enter\'){event.preventDefault();saveSettings();}" value="' + D.accounts + '"></div>' +
       '<div class="flabel">План по доходу на месяц</div>' +
-      '<div class="tinput soft"><input id="stPlan" inputmode="decimal" value="' + M.incomePlan + '"></div>' +
+      '<div class="tinput soft"><input id="stPlan" inputmode="decimal" enterkeyhint="done" onkeydown="if(event.key===\'Enter\'){event.preventDefault();saveSettings();}" value="' + M.incomePlan + '"></div>' +
       '<div class="flabel">Лимит личных трат</div>' +
-      '<div class="tinput soft"><input id="stLimit" inputmode="decimal" value="' + M.expenseLimit + '"></div>' +
+      '<div class="tinput soft"><input id="stLimit" inputmode="decimal" enterkeyhint="done" onkeydown="if(event.key===\'Enter\'){event.preventDefault();saveSettings();}" value="' + M.expenseLimit + '"></div>' +
       '<button class="done-btn" onclick="saveSettings()" style="background:var(--ink);color:#fff;margin-top:14px">Сохранить</button>' +
     '</div>' +
 
@@ -946,6 +948,24 @@ function save(){
   haptic('medium'); closeSheet(); render();
   toast(t.name + ' · ' + m(amount));
 }
+/* клавиатура: убираем нижнюю кнопку и подматываем поле к центру */
+document.addEventListener('focusin', function(e){
+  if (!e.target || e.target.tagName !== 'INPUT') return;
+  var sub = document.getElementById('sub');
+  if (sub && sub.contains(e.target)) sub.classList.add('kb');
+  setTimeout(function(){
+    try { e.target.scrollIntoView({ block:'center', behavior:'smooth' }); } catch(err) {}
+  }, 280);
+});
+document.addEventListener('focusout', function(){
+  setTimeout(function(){
+    var sub = document.getElementById('sub');
+    if (!sub) return;
+    var a = document.activeElement;
+    if (!a || a.tagName !== 'INPUT') sub.classList.remove('kb');
+  }, 150);
+});
+
 function toast(text){
   var el = document.getElementById('toast');
   el.textContent = text;
