@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Деньги</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --bg:#FAF6F1;
+  --card:#FFFFFF;
+  --ink:#14120F;
+  --muted:#8F8B84;
+  --faint:#B6B1A9;
+  --line:#EFEAE3;
+  --track:#EDE8E0;
+  --in:#3F7355;
+  --out:#A75B44;
+  --wait:#5D6B87;
+  --back:#8D7538;
+  --plan:#7C7468;
+  --shadow:0 2px 14px rgba(26,20,10,.05);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink)}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:16px;line-height:1.35;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+input{font:inherit;color:inherit;border:0;background:none;outline:none}
+
+/* ——— каркас ——— */
+.app{max-width:520px;margin:0 auto;padding:0 18px calc(130px + var(--safe-b));min-height:100vh}
+.screen{display:none;animation:fade .22s ease}
+.screen.on{display:block}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+
+.top{display:flex;align-items:center;justify-content:space-between;padding:14px 0 6px}
+.top .month{font-size:15px;color:var(--muted)}
+.icon-btn{width:38px;height:38px;border-radius:50%;background:var(--card);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center}
+
+h1.big{font-size:27px;font-weight:800;letter-spacing:-.4px;margin:6px 0 18px}
+.sect{font-size:17px;font-weight:800;letter-spacing:-.2px;margin:26px 0 10px;display:flex;justify-content:space-between;align-items:baseline}
+.sect .link{font-size:14px;font-weight:500;color:var(--wait)}
+
+/* ——— герой ——— */
+.hero{padding:22px 2px 6px}
+.hero .lbl{font-size:14px;color:var(--muted)}
+.hero .sum{font-size:50px;font-weight:800;letter-spacing:-2px;line-height:1.05;margin-top:2px}
+.hero .sum .cur{font-size:30px;font-weight:600;letter-spacing:-1px;color:var(--faint);margin-left:4px}
+.hero .meta{font-size:13.5px;color:var(--muted);margin-top:8px}
+.hero .meta b{font-weight:600;color:#6C685F}
+
+.card{background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:16px 17px}
+.card+.card{margin-top:10px}
+.calc{padding:4px 17px}
+.calc .r{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;
+  padding:13px 0;border-bottom:1px solid var(--line);font-size:14.5px}
+.calc .r:last-child{border-bottom:0}
+.calc .r .v{font-weight:600;white-space:nowrap}
+.calc .r .g{display:flex;align-items:center}
+
+.row{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left}
+.row .t{display:block;font-size:15.5px;font-weight:600}
+.row .s{display:block;font-size:13px;color:var(--muted);margin-top:2px}
+.row .v{font-size:17px;font-weight:700;white-space:nowrap}
+.chev{color:var(--faint);font-size:19px;margin-left:10px;line-height:1}
+.val-wrap{display:flex;align-items:center}
+
+.pill{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:1px}
+.c-in{color:var(--in)} .c-out{color:var(--out)} .c-wait{color:var(--wait)} .c-back{color:var(--back)} .c-plan{color:var(--plan)}
+.b-in{background:var(--in)} .b-out{background:var(--out)} .b-wait{background:var(--wait)} .b-back{background:var(--back)} .b-plan{background:var(--plan)}
+
+/* ——— план ——— */
+.plan .line+.line{margin-top:17px}
+.plan .head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.plan .head .n{font-size:14.5px;font-weight:600}
+.plan .head .g{font-size:13px;color:var(--muted)}
+.bar{position:relative;height:7px;border-radius:4px;background:var(--track);overflow:visible}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;transition:width .5s cubic-bezier(.3,.8,.3,1)}
+.bar .tick{position:absolute;top:-3px;bottom:-3px;width:1.5px;background:rgba(20,18,15,.22);border-radius:1px}
+.plan .note{font-size:12.5px;color:var(--faint);margin-top:7px}
+
+.debt{display:block;width:100%;text-align:left}
+.debt .dtop{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:12px}
+.debt .dl{display:block;font-size:13.5px;color:var(--muted);margin-bottom:2px}
+.debt .dsum{display:block;font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1}
+.debt .dsum .cur{font-size:19px;font-weight:600;color:var(--faint);margin-left:3px}
+.debt .dpct{font-size:17px;font-weight:700;color:var(--in)}
+.debt .dfoot{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-top:9px}
+.dcard .dname{display:block;font-size:15.5px;font-weight:700}
+.dcard .dmeta{display:block;font-size:13px;color:var(--muted);margin-top:3px}
+.dcard .bar{margin-top:11px}
+.addbtn{display:block;width:100%;margin-top:10px;padding:15px;border-radius:18px;
+  background:none;box-shadow:inset 0 0 0 1.5px #E1D9CE;color:var(--ink);font-size:15px;font-weight:700}
+.addbtn:active{background:#F3EDE5}
+.tag{display:inline-block;padding:3px 9px;border-radius:9px;background:#F6EEE9;color:var(--out);
+  font-size:11.5px;font-weight:600;margin-left:7px;vertical-align:1px}
+
+/* ——— список операций ——— */
+.op{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--line)}
+.op:last-child{border-bottom:0}
+.op .t{display:block;font-size:15px;font-weight:600}
+.op .s{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.op .v{font-size:15.5px;font-weight:700;white-space:nowrap;margin-left:12px}
+.empty{padding:26px 4px;text-align:center;color:var(--muted);font-size:14px}
+
+.done-btn{margin-top:10px;width:100%;padding:11px;border-radius:13px;background:#F5F1EA;font-size:14px;font-weight:600}
+.tagline{font-size:12.5px;color:var(--faint);margin-top:2px}
+
+/* ——— аналитика ——— */
+.dist{margin-top:4px}
+.dist .d{padding:12px 0;border-bottom:1px solid var(--line)}
+.dist .d:last-child{border-bottom:0}
+.dist .dh{display:flex;justify-content:space-between;font-size:14.5px;margin-bottom:7px}
+.dist .dh .p{color:var(--muted);font-size:13px}
+
+/* ——— нижняя навигация ——— */
+.tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + var(--safe-b));
+  display:flex;gap:4px;padding:6px;background:rgba(255,255,255,.88);backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);border-radius:26px;box-shadow:0 6px 22px rgba(26,20,10,.10);z-index:40}
+.tabs button{padding:9px 14px;border-radius:20px;font-size:13.5px;font-weight:600;color:var(--muted)}
+.tabs button.on{background:#F4EFE7;color:var(--ink)}
+
+.add{width:42px;height:42px;border-radius:50%;background:var(--ink);color:#fff;font-size:25px;font-weight:300;
+  display:flex;align-items:center;justify-content:center;margin-left:3px;transition:transform .15s ease;flex:none}
+.add:active{transform:scale(.9)}
+
+/* ——— подэкран ——— */
+.sub{position:fixed;inset:0;background:var(--bg);z-index:60;overflow-y:auto;transform:translateX(100%);
+  transition:transform .28s cubic-bezier(.3,.8,.3,1);padding:0 18px calc(40px + var(--safe-b))}
+.sub.on{transform:translateX(0)}
+.sub .inner{padding-bottom:calc(112px + var(--safe-b))}
+.sub .inner{max-width:520px;margin:0 auto}
+.sub .bar-top{display:flex;align-items:center;gap:12px;padding:16px 0 4px}
+.sub .bar-top .ttl{font-size:22px;font-weight:800;letter-spacing:-.4px}
+.backbar{position:fixed;left:0;right:0;bottom:0;z-index:62;padding:14px 18px calc(16px + var(--safe-b));
+  background:linear-gradient(to top,var(--bg) 62%,rgba(250,246,241,0));pointer-events:none}
+.backbar button{pointer-events:auto;display:block;width:100%;max-width:484px;margin:0 auto;padding:17px;
+  border-radius:18px;background:var(--ink);color:#fff;font-size:16px;font-weight:700;
+  box-shadow:0 6px 20px rgba(20,18,15,.20)}
+
+/* ——— шторка добавления ——— */
+.scrim{position:fixed;inset:0;background:rgba(24,20,14,.34);opacity:0;pointer-events:none;
+  transition:opacity .25s ease;z-index:70}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:71;background:var(--bg);
+  border-radius:26px 26px 0 0;padding:10px 18px calc(22px + var(--safe-b));
+  transform:translateY(102%);transition:transform .3s cubic-bezier(.3,.85,.3,1);max-height:92vh;overflow-y:auto}
+.sheet.on{transform:translateY(0)}
+.grab{width:38px;height:4px;border-radius:3px;background:#DDD6CC;margin:6px auto 16px}
+.sheet h2{font-size:20px;font-weight:800;letter-spacing:-.3px;margin:0 0 14px}
+
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:16px 15px;text-align:left}
+.tile .n{font-size:15.5px;font-weight:700;margin-top:9px}
+.tile .d{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.3}
+.dot{width:9px;height:9px;border-radius:50%;display:block}
+
+.amount{background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:20px 18px;text-align:center;margin-bottom:12px}
+.amount input{font-size:42px;font-weight:800;letter-spacing:-1.4px;text-align:center;width:100%}
+.amount input::placeholder{color:#DCD6CC}
+.amount .cap{font-size:13px;color:var(--muted)}
+
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0 2px}
+.chip{padding:8px 13px;border-radius:14px;background:var(--card);box-shadow:var(--shadow);font-size:13.5px}
+.chip.on{background:var(--ink);color:#fff;box-shadow:none}
+.chip.add-chip{background:none;box-shadow:inset 0 0 0 1.5px #E3DCD2;color:var(--muted)}
+.flabel{font-size:13px;color:var(--muted);margin:16px 0 0}
+.tinput{background:var(--card);border-radius:15px;box-shadow:var(--shadow);padding:13px 15px;margin-top:8px}
+.tinput input{width:100%;font-size:15px}
+
+.cta{width:100%;margin-top:18px;padding:16px;border-radius:17px;background:var(--ink);color:#fff;
+  font-size:16px;font-weight:700;transition:opacity .15s}
+.cta:disabled{opacity:.3}
+.ghost{width:100%;margin-top:9px;padding:13px;font-size:14.5px;color:var(--muted)}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%) translateY(20px);bottom:calc(96px + var(--safe-b));
+  background:var(--ink);color:#fff;padding:11px 18px;border-radius:15px;font-size:14px;font-weight:600;
+  opacity:0;pointer-events:none;transition:all .25s ease;z-index:90}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ——— заглушка ——— */
+.stub{max-width:400px;margin:0 auto;padding:28vh 26px 0;text-align:center}
+.stub .h{font-size:19px;font-weight:800;margin-bottom:8px}
+.stub .p{font-size:14.5px;color:var(--muted);line-height:1.45}
+.stub button{margin-top:20px;padding:13px 26px;border-radius:16px;background:var(--ink);color:#fff;font-weight:700;font-size:15px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script>
+/* ============ Telegram ============ */
+var TG = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+if (TG) { try { TG.ready(); TG.expand(); } catch(e){} }
+
+/* ============ утилиты ============ */
+var CUR = '₽';
+function money(n){ return Math.round(n).toLocaleString('ru-RU').replace(/,/g,' '); }
+function m(n){ return money(n) + ' ' + CUR; }
+function dayLabel(iso){
+  var mo = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  var p = String(iso).split('-');
+  if (p.length < 3) return iso;
+  return parseInt(p[2],10) + ' ' + mo[parseInt(p[1],10)-1];
+}
+function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function haptic(style){ try{ TG.HapticFeedback.impactOccurred(style||'light'); }catch(e){} }
+
+/* ============ состояние ============ */
+var D = null, tab = 'home';
+var draft = { type:null, amount:'', title:'', tag:'' };
+
+/* ============ загрузка ============ */
+fetch('data.json?v=' + Date.now(), { cache:'no-store' })
+  .then(function(r){ if(!r.ok) throw new Error('http ' + r.status); return r.json(); })
+  .then(function(json){ D = json; CUR = json.currency || '₽'; render(); })
+  .catch(function(){ stub(); });
+
+function stub(){
+  document.getElementById('root').innerHTML =
+    '<div class="stub">' +
+      '<div class="h">Данные не загрузились</div>' +
+      '<div class="p">Файл data.json не найден или повреждён. Проверь, что он лежит рядом с index.html.</div>' +
+      '<button onclick="location.reload()">Попробовать снова</button>' +
+    '</div>';
+}
+
+/* ============ расчёты ============ */
+function calc(){
+  var ops = D.operations;
+  var sum = function(f){ return ops.filter(f).reduce(function(a,o){ return a + o.amount; }, 0); };
+
+  var income   = sum(function(o){ return o.type === 'income'; });
+  var expense  = sum(function(o){ return o.type === 'expense'; });
+  var pending  = sum(function(o){ return o.type === 'pending' && o.status !== 'done'; });
+  var toReturn = sum(function(o){ return o.type === 'work' && o.status !== 'done'; });
+  var planned  = sum(function(o){ return o.type === 'planned' && o.status !== 'done'; });
+  var reserved = (D.reserves||[]).reduce(function(a,r){ return a + r.amount; }, 0);
+
+  return {
+    income: income, expense: expense, pending: pending, toReturn: toReturn,
+    reserved: reserved, planned: planned,
+    plannedCount: ops.filter(function(o){ return o.type==='planned' && o.status!=='done'; }).length,
+    pendingCount:  ops.filter(function(o){ return o.type==='pending' && o.status!=='done'; }).length,
+    returnCount:   ops.filter(function(o){ return o.type==='work'    && o.status!=='done'; }).length,
+    accounts: D.accounts,
+    free: D.accounts - reserved - planned
+  };
+}
+function debts(){
+  var list = (D.debts || []);
+  var initial = list.reduce(function(a,x){ return a + x.initial; }, 0);
+  var left    = list.reduce(function(a,x){ return a + x.remaining; }, 0);
+  var paidNow = D.operations.filter(function(o){ return o.type === 'debt'; })
+                  .reduce(function(a,o){ return a + o.amount; }, 0);
+  return { list:list, initial:initial, left:left, closed:initial - left,
+           share: initial ? (initial - left) / initial : 0, paidNow: paidNow,
+           active: list.filter(function(x){ return x.remaining > 0; }).length };
+}
+
+function plural(n, a, b, c){
+  var n10 = n % 10, n100 = n % 100;
+  if (n10 === 1 && n100 !== 11) return a;
+  if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return b;
+  return c;
+}
+
+/* ============ рендер ============ */
+function render(){
+  var c = calc(), M = D.month;
+  document.getElementById('root').innerHTML =
+    '<div class="app">' +
+      screenHome(c, M) + screenHistory() + screenStats(c) +
+    '</div>' +
+    '<div class="tabs">' +
+      tabBtn('home','Главная') + tabBtn('history','История') + tabBtn('stats','Аналитика') +
+      '<button class="add" onclick="openSheet()" aria-label="Добавить операцию">+</button>' +
+    '</div>' +
+    '<div class="sub" id="sub"><div class="inner" id="subBody"></div></div>' +
+    '<div class="scrim" id="scrim" onclick="closeSheet()"></div>' +
+    '<div class="sheet" id="sheet"></div>' +
+    '<div class="toast" id="toast"></div>';
+}
+function tabBtn(id, name){
+  return '<button class="' + (tab===id?'on':'') + '" onclick="go(\'' + id + '\')">' + name + '</button>';
+}
+function go(id){ tab = id; haptic(); render(); window.scrollTo(0,0); }
+
+function screenHome(c, M){
+  var pace = M.dayToday / M.daysTotal;
+  var incP = Math.min(c.income / M.incomePlan, 1);
+  var expP = Math.min(c.expense / M.expenseLimit, 1);
+  var left = M.daysTotal - M.dayToday;
+
+  return '<section class="screen ' + (tab==='home'?'on':'') + '">' +
+    '<div class="top"><span class="month">' + esc(M.label) + ' · осталось ' + left + ' ' + plural(left,'день','дня','дней') + '</span>' +
+      '<button class="icon-btn" onclick="openReserves()" aria-label="Отложено"><svg width="17" height="17" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.5" stroke="#14120F" stroke-width="1.6"/><path d="M10 2.5a7.5 7.5 0 0 1 7.5 7.5H10z" fill="#14120F"/></svg></button></div>' +
+
+    '<div class="hero">' +
+      '<div class="lbl">Свободно</div>' +
+      '<div class="sum">' + money(c.free) + '<span class="cur">' + CUR + '</span></div>' +
+      '<div class="meta">Без отложенного и запланированного</div>' +
+    '</div>' +
+
+    '<div class="card calc">' +
+      '<div class="r"><span>На счетах</span><span class="v">' + m(c.accounts) + '</span></div>' +
+      '<button class="r" onclick="openReserves()"><span>Отложено</span>' +
+        '<span class="g"><span class="v">− ' + m(c.reserved) + '</span><span class="chev">›</span></span></button>' +
+      '<button class="r" onclick="openPlanned()"><span>Запланированные траты</span>' +
+        '<span class="g"><span class="v">− ' + m(c.planned) + '</span><span class="chev">›</span></span></button>' +
+    '</div>' +
+
+    debtBlock() +
+
+    '<div class="sect">Ждут зачисления</div>' +
+    '<button class="card row" onclick="openPending()">' +
+      '<span><span class="t"><i class="pill b-wait"></i>Ожидается</span>' +
+        '<span class="s">' + c.pendingCount + ' ' + plural(c.pendingCount,'выплата','выплаты','выплат') + '</span></span>' +
+      '<span class="val-wrap"><span class="v c-wait">+' + m(c.pending) + '</span><span class="chev">›</span></span>' +
+    '</button>' +
+    '<button class="card row" onclick="openReturns()">' +
+      '<span><span class="t"><i class="pill b-back"></i>Мне должны вернуть</span>' +
+        '<span class="s">' + c.returnCount + ' ' + plural(c.returnCount,'операция','операции','операций') + '</span></span>' +
+      '<span class="val-wrap"><span class="v c-back">' + m(c.toReturn) + '</span><span class="chev">›</span></span>' +
+    '</button>' +
+
+    '<div class="sect">План месяца</div>' +
+    '<div class="card plan">' +
+      barLine('Заработала', c.income, M.incomePlan, 'var(--in)', pace,
+        c.pending > 0 ? 'С учётом ожидаемых — ' + m(c.income + c.pending) : '') +
+      barLine('Потратила', c.expense, M.expenseLimit, 'var(--out)', pace,
+        c.planned > 0 ? 'С учётом запланированных — ' + m(c.expense + c.planned)
+                      : (c.expense/M.expenseLimit > pace ? 'Идёшь быстрее лимита' : 'Идёшь в темпе')) +
+    '</div>' +
+
+    '<div class="sect">Последние операции<button class="link" onclick="go(\'history\')">Все</button></div>' +
+    '<div class="card">' + opsList(recent(4)) + '</div>' +
+  '</section>';
+}
+
+function debtBlock(){
+  var d = debts();
+  if (!d.list.length) return '';
+  if (d.left <= 0) {
+    return '<div class="sect">Долги</div>' +
+      '<div class="card"><div class="empty">Долгов больше нет. Ты закрыла всё.</div></div>';
+  }
+  return '<div class="sect">Долги</div>' +
+    '<button class="card debt" onclick="openDebts()">' +
+      '<div class="dtop"><span><span class="dl">Закрыто</span>' +
+        '<span class="dsum">' + money(d.closed) + '<span class="cur">' + CUR + '</span></span></span>' +
+        '<span class="val-wrap"><span class="dpct">' + Math.round(d.share*100) + '%</span>' +
+        '<span class="chev">›</span></span></div>' +
+      '<div class="bar"><i style="width:' + (d.share*100).toFixed(1) + '%;background:var(--in)"></i></div>' +
+      '<div class="dfoot"><span>Осталось ' + m(d.left) + '</span>' +
+        '<span>' + (d.paidNow > 0 ? 'В ' + monthIn() + ' — ' + m(d.paidNow) : d.active + ' ' + plural(d.active,'долг','долга','долгов')) + '</span></div>' +
+    '</button>';
+}
+function monthIn(){
+  var map = {'Январь':'январе','Февраль':'феврале','Март':'марте','Апрель':'апреле','Май':'мае',
+    'Июнь':'июне','Июль':'июле','Август':'августе','Сентябрь':'сентябре','Октябрь':'октябре',
+    'Ноябрь':'ноябре','Декабрь':'декабре'};
+  return map[D.month.label] || 'этом месяце';
+}
+
+function barLine(name, val, goal, color, pace, note){
+  var p = Math.min(val/goal, 1);
+  return '<div class="line">' +
+    '<div class="head"><span class="n">' + name + '</span>' +
+      '<span class="g">' + money(val) + ' из ' + m(goal) + '</span></div>' +
+    '<div class="bar"><i style="width:' + (p*100).toFixed(1) + '%;background:' + color + '"></i>' +
+      '<span class="tick" style="left:' + (pace*100).toFixed(1) + '%"></span></div>' +
+    (note ? '<div class="note">' + esc(note) + '</div>' : '') +
+  '</div>';
+}
+
+function recent(n){
+  return D.operations.filter(function(o){ return o.type==='income' || o.type==='expense' || o.type==='work'; })
+    .slice().sort(function(a,b){ return a.date < b.date ? 1 : -1; }).slice(0, n);
+}
+
+function opsList(list){
+  if (!list.length) return '<div class="empty">Пока ничего не внесено.<br>Нажми «+», чтобы добавить первую операцию.</div>';
+  return list.map(function(o){
+    var sign = o.type === 'income' ? '+' : '−';
+    var cls  = o.type === 'income' ? 'c-in' : (o.type === 'work' ? 'c-back' : 'c-out');
+    var tag  = o.source || o.category || '';
+    var extra = o.type === 'work' ? ' · ' + (o.status === 'done' ? 'вернули' : 'ждёт возврата') : '';
+    return '<div class="op"><span><span class="t">' + esc(o.title) + '</span>' +
+      '<span class="s">' + dayLabel(o.date) + (tag ? ' · ' + esc(tag) : '') + extra + '</span></span>' +
+      '<span class="v ' + cls + '">' + sign + m(o.amount) + '</span></div>';
+  }).join('');
+}
+
+function screenHistory(){
+  var list = D.operations.filter(function(o){ return o.type!=='pending' && o.type!=='planned'; })
+    .slice().sort(function(a,b){ return a.date < b.date ? 1 : -1; });
+  return '<section class="screen ' + (tab==='history'?'on':'') + '">' +
+    '<h1 class="big" style="margin-top:20px">История</h1>' +
+    '<div class="card">' + opsList(list) + '</div>' +
+  '</section>';
+}
+
+function screenStats(c){
+  var byCat = group(function(o){ return o.type==='expense'; }, 'category', c.expense);
+  var bySrc = group(function(o){ return o.type==='income';  }, 'source',   c.income);
+  return '<section class="screen ' + (tab==='stats'?'on':'') + '">' +
+    '<h1 class="big" style="margin-top:20px">Аналитика</h1>' +
+    '<div class="sect">Откуда доход</div>' +
+    '<div class="card dist">' + (bySrc || '<div class="empty">Доходов пока нет</div>') + '</div>' +
+    '<div class="sect">На что уходит</div>' +
+    '<div class="card dist">' + (byCat || '<div class="empty">Расходов пока нет</div>') + '</div>' +
+    '<div class="sect">Долги</div>' +
+    '<div class="card"><div class="row"><span><span class="t">Внесено за ' + esc(monthIn()) + '</span>' +
+      '<span class="s">не входит в лимит личных трат</span></span>' +
+      '<span class="v c-in">' + m(debts().paidNow) + '</span></div></div>' +
+    '<div class="card"><div class="row"><span><span class="t">Осталось выплатить</span>' +
+      '<span class="s">закрыто ' + Math.round(debts().share*100) + '%</span></span>' +
+      '<span class="v">' + m(debts().left) + '</span></div></div>' +
+
+    '<div class="sect">Рабочие расходы</div>' +
+    '<div class="card"><div class="row"><span><span class="t">Вернули</span>' +
+      '<span class="s">за ' + esc(D.month.label.toLowerCase()) + '</span></span>' +
+      '<span class="v c-in">' + m(sumWork('done')) + '</span></div></div>' +
+    '<div class="card"><div class="row"><span><span class="t">Ещё ждёшь</span>' +
+      '<span class="s">' + c.returnCount + ' ' + plural(c.returnCount,'операция','операции','операций') + '</span></span>' +
+      '<span class="v c-back">' + m(c.toReturn) + '</span></div></div>' +
+  '</section>';
+}
+function sumWork(st){
+  return D.operations.filter(function(o){ return o.type==='work' && o.status===st; })
+    .reduce(function(a,o){ return a + o.amount; }, 0);
+}
+function group(filter, key, total){
+  var map = {};
+  D.operations.filter(filter).forEach(function(o){
+    var k = o[key] || 'Другое';
+    map[k] = (map[k] || 0) + o.amount;
+  });
+  var keys = Object.keys(map).sort(function(a,b){ return map[b] - map[a]; });
+  if (!keys.length || !total) return '';
+  return keys.map(function(k){
+    var p = map[k] / total;
+    return '<div class="d"><div class="dh"><span>' + esc(k) + '</span>' +
+      '<span class="p">' + m(map[k]) + ' · ' + Math.round(p*100) + '%</span></div>' +
+      '<div class="bar"><i style="width:' + (p*100).toFixed(1) + '%;background:#CFC7BA"></i></div></div>';
+  }).join('');
+}
+
+/* ============ подэкраны ============ */
+function openSub(title, body){
+  document.getElementById('subBody').innerHTML =
+    '<div class="bar-top"><span class="ttl">' + title + '</span></div>' + body +
+    '<div class="backbar"><button onclick="closeSub()">Назад</button></div>';
+  document.getElementById('sub').classList.add('on');
+  haptic();
+}
+function closeSub(){ document.getElementById('sub').classList.remove('on'); }
+
+function openPending(){
+  var list = D.operations.filter(function(o){ return o.type==='pending' && o.status!=='done'; })
+    .sort(function(a,b){ return a.date > b.date ? 1 : -1; });
+  var body = list.length ? list.map(function(o){
+    return '<div class="card"><div class="row"><span><span class="t">' + esc(o.title) + '</span>' +
+      '<span class="s">' + esc(o.source||'') + ' · до ' + dayLabel(o.date) + '</span></span>' +
+      '<span class="v c-wait">+' + m(o.amount) + '</span></div>' +
+      '<button class="done-btn" onclick="markPaid(\'' + o.id + '\')">Деньги пришли</button></div>';
+  }).join('') : '<div class="card"><div class="empty">Все выплаты получены.</div></div>';
+  openSub('Ожидается', '<div style="margin-top:10px">' + body + '</div>');
+}
+
+function openReturns(){
+  var list = D.operations.filter(function(o){ return o.type==='work' && o.status!=='done'; })
+    .sort(function(a,b){ return a.date > b.date ? 1 : -1; });
+  var body = list.length ? list.map(function(o){
+    return '<div class="card"><div class="row"><span><span class="t">' + esc(o.title) + '</span>' +
+      '<span class="s">' + esc(o.category||'') + ' · ' + dayLabel(o.date) + '</span></span>' +
+      '<span class="v c-back">' + m(o.amount) + '</span></div>' +
+      '<button class="done-btn" onclick="markReturned(\'' + o.id + '\')">Мне вернули</button></div>';
+  }).join('') : '<div class="card"><div class="empty">Все рабочие расходы возвращены.</div></div>';
+  openSub('Мне должны вернуть',
+    '<div class="tagline" style="margin:8px 2px 10px">Эти траты не считаются личными расходами.</div>' + body);
+}
+
+function openPlanned(){
+  var list = D.operations.filter(function(o){ return o.type==='planned' && o.status!=='done'; })
+    .sort(function(a,b){ return a.date > b.date ? 1 : -1; });
+  var body = list.length ? list.map(function(o){
+    return '<div class="card"><div class="row"><span><span class="t">' + esc(o.title) + '</span>' +
+      '<span class="s">' + esc(o.category||'') + ' · до ' + dayLabel(o.date) + '</span></span>' +
+      '<span class="v c-plan">' + m(o.amount) + '</span></div>' +
+      '<button class="done-btn" onclick="markSpent(\'' + o.id + '\')">Оплатила</button></div>';
+  }).join('') : '<div class="card"><div class="empty">Запланированных трат нет.<br>Всё, что на счетах, свободно.</div></div>';
+  openSub('Запланированные траты',
+    '<div class="tagline" style="margin:8px 2px 10px">Деньги ещё на счёте, но уже расписаны.</div>' + body);
+}
+
+function markSpent(id){
+  var o = find(id); if (!o) return;
+  o.status = 'done';
+  D.operations.push({ id:'n'+Date.now(), type:'expense', title:o.title, category:o.category,
+    amount:o.amount, date:today() });
+  D.accounts -= o.amount;
+  haptic('medium'); closeSub(); render(); toast('Оплачено ' + m(o.amount));
+}
+
+var newDebtOpen = false;
+function toggleNewDebt(){ newDebtOpen = !newDebtOpen; haptic(); openDebts(); }
+function createDebt(){
+  var n = document.getElementById('ndname'), a = document.getElementById('ndsum');
+  var title = n ? n.value.trim() : '';
+  var sum = a ? parseInt(String(a.value).replace(/[^\d]/g,''), 10) : 0;
+  if (!title || !sum) return;
+  if (!D.debts) D.debts = [];
+  D.debts.push({ id:'d'+Date.now(), title:title, initial:sum, remaining:sum, note:'' });
+  newDebtOpen = false;
+  haptic('medium'); render(); openDebts(); toast('Долг добавлен');
+}
+
+function openDebts(){
+  var d = debts();
+  var head = '<div class="card"><div class="dtop" style="display:flex;align-items:flex-end;justify-content:space-between">' +
+    '<span><span class="dl" style="display:block;font-size:13.5px;color:var(--muted)">Осталось выплатить</span>' +
+    '<span style="display:block;font-size:30px;font-weight:800;letter-spacing:-1px">' + money(d.left) + ' ' + CUR + '</span></span>' +
+    '<span style="font-size:17px;font-weight:700;color:var(--in)">' + Math.round(d.share*100) + '%</span></div>' +
+    '<div class="bar" style="margin-top:12px"><i style="width:' + (d.share*100).toFixed(1) + '%;background:var(--in)"></i></div>' +
+    '<div class="dfoot" style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-top:9px">' +
+    '<span>Уже закрыто ' + m(d.closed) + '</span><span>Было ' + m(d.initial) + '</span></div></div>';
+
+  var body = d.list.map(function(x){
+    var p = x.initial ? (x.initial - x.remaining) / x.initial : 1;
+    if (x.remaining <= 0) {
+      return '<div class="card dcard"><div class="row"><span><span class="dname">' + esc(x.title) + '</span>' +
+        '<span class="dmeta">Закрыт полностью</span></span><span class="v c-in">0 ' + CUR + '</span></div></div>';
+    }
+    return '<div class="card dcard">' +
+      '<div class="row"><span><span class="dname">' + esc(x.title) +
+        (x.note ? '<span class="tag">' + esc(x.note) + '</span>' : '') + '</span>' +
+        '<span class="dmeta">Было ' + m(x.initial) + ' · закрыто ' + Math.round(p*100) + '%</span></span>' +
+        '<span class="v">' + m(x.remaining) + '</span></div>' +
+      '<div class="bar"><i style="width:' + (p*100).toFixed(1) + '%;background:var(--in)"></i></div>' +
+      '<button class="done-btn" onclick="payDebt(\'' + x.id + '\')">Внести платёж</button></div>';
+  }).join('');
+
+  var form = newDebtOpen
+    ? '<div class="card"><div class="tinput" style="box-shadow:none;background:#F7F3ED"><input id="ndname" placeholder="Название долга"></div>' +
+      '<div class="tinput" style="box-shadow:none;background:#F7F3ED;margin-top:8px"><input id="ndsum" inputmode="numeric" placeholder="Сколько осталось"></div>' +
+      '<button class="done-btn" onclick="createDebt()" style="background:var(--ink);color:#fff">Добавить долг</button>' +
+      '<button class="ghost" onclick="toggleNewDebt()" style="margin-top:4px">Отмена</button></div>'
+    : '<button class="addbtn" onclick="toggleNewDebt()">+ Добавить долг</button>';
+
+  openSub('Долги', '<div style="margin-top:10px">' + head + form + body + '</div>');
+}
+
+function payDebt(id){
+  var x = null;
+  (D.debts||[]).forEach(function(y){ if (y.id === id) x = y; });
+  if (!x) return;
+  draft = { type:'debt', debtId:id, amount:'', title:'Платёж: ' + x.title, tag:'Долги', newTag:false };
+  drawSheet();
+  document.getElementById('scrim').classList.add('on');
+  document.getElementById('sheet').classList.add('on');
+  haptic();
+}
+
+function openReserves(){
+  var body = (D.reserves||[]).map(function(r){
+    return '<div class="card"><div class="row"><span class="t">' + esc(r.title) + '</span>' +
+      '<span class="v">' + m(r.amount) + '</span></div></div>';
+  }).join('');
+  openSub('Отложено',
+    '<div class="tagline" style="margin:8px 2px 10px">Эти деньги вычитаются из суммы «Свободно».</div>' +
+    (body || '<div class="card"><div class="empty">Пока ничего не отложено.</div></div>'));
+}
+
+function markPaid(id){
+  var o = find(id); if (!o) return;
+  o.status = 'done';
+  D.operations.push({ id:'n'+Date.now(), type:'income', title:o.title, source:o.source,
+    amount:o.amount, date:today() });
+  D.accounts += o.amount;
+  haptic('medium'); closeSub(); render(); toast('Зачислено ' + m(o.amount));
+}
+function markReturned(id){
+  var o = find(id); if (!o) return;
+  o.status = 'done';
+  D.accounts += o.amount;
+  haptic('medium'); closeSub(); render(); toast('Возврат ' + m(o.amount));
+}
+function find(id){
+  for (var i=0;i<D.operations.length;i++) if (D.operations[i].id===id) return D.operations[i];
+  return null;
+}
+function today(){
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+/* ============ добавление операции ============ */
+var TYPES = {
+  income:{ name:'Доход',         desc:'Деньги уже пришли',        color:'var(--in)',   tags:'sources', hint:'Съёмка для бренда' },
+  expense:{ name:'Расход',       desc:'Личная трата',             color:'var(--out)',  tags:'categories', hint:'Продукты' },
+  pending:{ name:'Ожидаю',       desc:'Заработала, заплатят позже', color:'var(--wait)', tags:'sources', hint:'Реклама в блоге' },
+  work:{    name:'Рабочий расход',desc:'Потом мне вернут',         color:'var(--back)', tags:'workCategories', hint:'Такси на съёмку' },
+  debt:{    name:'Платёж по долгу', desc:'Уменьшает мой долг',  color:'var(--in)',   tags:'debts', hint:'Комментарий' },
+  planned:{ name:'Запланирую',    desc:'Точно потрачу в этом месяце', color:'var(--plan)', tags:'categories', hint:'Абонемент в зал' }
+};
+
+function openSheet(){
+  draft = { type:null, amount:'', title:'', tag:'', debtId:null, newTag:false };
+  drawSheet();
+  document.getElementById('scrim').classList.add('on');
+  document.getElementById('sheet').classList.add('on');
+  haptic();
+}
+function closeSheet(){
+  document.getElementById('scrim').classList.remove('on');
+  document.getElementById('sheet').classList.remove('on');
+}
+function drawSheet(){
+  var el = document.getElementById('sheet');
+  el.innerHTML = '<div class="grab"></div>' + (draft.type ? stepAmount() : stepType());
+  if (draft.newTag) {
+    setTimeout(function(){ var i = document.getElementById('newtag'); if (i) i.focus(); }, 180);
+  } else if (draft.type && !draft.amount) {
+    setTimeout(function(){ var i = document.getElementById('amt'); if (i) i.focus(); }, 180);
+  }
+}
+function stepType(){
+  var tiles = Object.keys(TYPES).filter(function(k){ return !TYPES[k].hidden; }).map(function(k){
+    var t = TYPES[k];
+    return '<button class="tile' + (t.wide ? ' wide' : '') + '" onclick="pickType(\'' + k + '\')">' +
+      '<span class="dot" style="background:' + t.color + '"></span>' +
+      '<div class="n">' + t.name + '</div><div class="d">' + t.desc + '</div></button>';
+  }).join('');
+  var pres = (D.presets||[]).map(function(p){
+    return '<button class="chip" onclick="usePreset(\'' + p.id + '\')">' + esc(p.title) + ' · ' + money(p.amount) + '</button>';
+  }).join('');
+  return '<h2>Что записываем?</h2><div class="tiles">' + tiles + '</div>' +
+    (pres ? '<div class="flabel">Быстрый ввод</div><div class="chips">' + pres + '</div>' : '') +
+    '<button class="ghost" onclick="closeSheet()">Отмена</button>';
+}
+function stepAmount(){
+  var t = TYPES[draft.type];
+  return '<h2>' + t.name + '</h2>' +
+    '<div class="amount">' +
+      '<input id="amt" inputmode="numeric" placeholder="0" value="' + esc(draft.amount) + '" oninput="onAmount(this.value)">' +
+      '<div class="cap">' + (draft.type==='pending' ? 'сумма будущей выплаты'
+        : (draft.type==='planned' ? 'сумма будущей траты'
+        : (draft.type==='debt' ? 'сколько вносишь' : 'сумма в ' + CUR))) + '</div>' +
+    '</div>' +
+    '<div class="tinput"><input id="ttl" placeholder="' + t.hint + '" value="' + esc(draft.title) + '" oninput="draft.title=this.value"></div>' +
+    tagBlock(t) +
+    '<button class="cta" id="save" onclick="save()" ' + (canSave() ? '' : 'disabled') + '>Готово</button>' +
+    '<button class="ghost" onclick="back()">Назад</button>';
+}
+
+function canSave(){
+  if (!draft.amount) return false;
+  if (draft.type === 'debt' && !draft.debtId) return false;
+  return true;
+}
+
+function tagBlock(t){
+  if (!t.tags) return '';
+
+  if (t.tags === 'debts') {
+    var ds = (D.debts || []).filter(function(x){ return x.remaining > 0; });
+    if (!ds.length) return '<div class="flabel">Открытых долгов нет</div>';
+    var c = ds.map(function(x){
+      return '<button class="chip ' + (draft.debtId===x.id?'on':'') + '" onclick="pickDebt(\'' + x.id + '\')">' +
+        esc(x.title) + '</button>';
+    }).join('');
+    return '<div class="flabel">Какой долг</div><div class="chips">' + c + '</div>';
+  }
+
+  var label = t.tags === 'sources' ? 'Источник' : 'Категория';
+  if (draft.newTag) {
+    return '<div class="flabel">' + (t.tags==='sources' ? 'Новый источник дохода' : 'Новая категория') + '</div>' +
+      '<div class="tinput"><input id="newtag" placeholder="' +
+        (t.tags==='sources' ? 'Например, «Консультации»' : 'Например, «Обучение»') + '" ' +
+      'onkeydown="if(event.key===\'Enter\'){event.preventDefault();addTag();}"></div>' +
+      '<button class="done-btn" onclick="addTag()">Добавить</button>';
+  }
+  var tags = D[t.tags] || [];
+  var chips = tags.map(function(x){
+    return '<button class="chip ' + (draft.tag===x?'on':'') + '" onclick="pickTag(\'' + esc(x) + '\')">' + esc(x) + '</button>';
+  }).join('');
+  return '<div class="flabel">' + label + '</div><div class="chips">' + chips +
+    '<button class="chip add-chip" onclick="startNewTag()">+ Своя</button></div>';
+}
+
+function pickDebt(id){
+  var x = null;
+  (D.debts||[]).forEach(function(y){ if (y.id === id) x = y; });
+  if (!x) return;
+  draft.debtId = id;
+  if (!draft.title || draft.title.indexOf('Платёж: ') === 0) draft.title = 'Платёж: ' + x.title;
+  haptic(); drawSheet();
+}
+function startNewTag(){ draft.newTag = true; drawSheet(); }
+function addTag(){
+  var el = document.getElementById('newtag');
+  var v = el ? el.value.trim() : '';
+  if (!v) { draft.newTag = false; drawSheet(); return; }
+  var key = TYPES[draft.type].tags;
+  if (!D[key]) D[key] = [];
+  if (D[key].indexOf(v) === -1) D[key].unshift(v);
+  draft.tag = v; draft.newTag = false;
+  haptic(); drawSheet();
+}
+
+function pickType(k){ draft.type = k; draft.tag = ''; draft.debtId = null; draft.newTag = false; haptic(); drawSheet(); }
+function back(){ draft.type = null; drawSheet(); }
+function pickTag(x){ draft.tag = x; haptic(); drawSheet(); }
+function keepTitle(){
+  var el = document.getElementById('ttl');
+  if (el) draft.title = el.value;
+}
+function onAmount(v){
+  draft.amount = v.replace(/[^\d]/g,'');
+  var b = document.getElementById('save');
+  if (b) b.disabled = !canSave();
+}
+function usePreset(id){
+  var p = null;
+  (D.presets||[]).forEach(function(x){ if (x.id===id) p = x; });
+  if (!p) return;
+  draft = { type:p.type, amount:String(p.amount), title:p.title, tag:p.source || p.category || '', debtId:null, newTag:false };
+  haptic(); drawSheet();
+}
+function save(){
+  var amount = parseInt(draft.amount, 10);
+  if (!amount) return;
+  var t = TYPES[draft.type];
+  var op = { id:'n'+Date.now(), type:draft.type, amount:amount, date:today(),
+             title: draft.title || t.name };
+  if (t.tags === 'sources') op.source = draft.tag || 'Другое';
+  else op.category = draft.tag || 'Другое';
+  if (draft.type === 'pending' || draft.type === 'work' || draft.type === 'planned') op.status = 'wait';
+
+  if (draft.type === 'debt') {
+    var dd = null;
+    (D.debts||[]).forEach(function(y){ if (y.id === draft.debtId) dd = y; });
+    if (dd) dd.remaining = Math.max(0, dd.remaining - amount);
+    op.debtId = draft.debtId;
+    op.category = 'Долги';
+    D.accounts -= amount;
+    D.operations.push(op);
+    haptic('medium'); closeSheet(); render();
+    toast(dd && dd.remaining === 0 ? 'Долг закрыт' : 'Минус ' + m(amount) + ' из долга');
+    setTimeout(function(){ openDebts(); }, 260);
+    return;
+  }
+
+  D.operations.push(op);
+  if (draft.type === 'income')  D.accounts += amount;
+  if (draft.type === 'expense') D.accounts -= amount;
+  if (draft.type === 'work')    D.accounts -= amount;
+
+  haptic('medium'); closeSheet(); render();
+  toast(t.name + ' · ' + m(amount));
+}
+function toast(text){
+  var el = document.getElementById('toast');
+  el.textContent = text;
+  el.classList.add('on');
+  setTimeout(function(){ el.classList.remove('on'); }, 2000);
+}
+</script>
+</body>
+</html>
