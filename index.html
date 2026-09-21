@@ -53,6 +53,8 @@ h1.big{font-size:27px;font-weight:800;letter-spacing:-.4px;margin:6px 0 18px}
 /* ——— герой ——— */
 .hero{padding:22px 2px 6px}
 .hero .lbl{font-size:14px;color:var(--muted)}
+.hero .sum.minus{color:var(--out)}
+.hero .sum.minus .cur{color:var(--out);opacity:.45}
 .hero .sum{font-size:50px;font-weight:800;letter-spacing:-2px;line-height:1.05;margin-top:2px}
 .hero .sum .cur{font-size:30px;font-weight:600;letter-spacing:-1px;color:var(--faint);margin-left:4px}
 .hero .meta{font-size:13.5px;color:var(--muted);margin-top:8px}
@@ -103,6 +105,8 @@ h1.big{font-size:27px;font-weight:800;letter-spacing:-.4px;margin:6px 0 18px}
 .addbtn:active{background:#F3EDE5}
 .addbtn.danger{color:var(--out);box-shadow:inset 0 0 0 1.5px #EBD8D0}
 .tinput.soft{box-shadow:none;background:#F7F3ED}
+textarea.exp{width:100%;height:260px;border:0;outline:none;resize:none;background:#F7F3ED;border-radius:12px;
+  padding:12px;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink);display:block}
 .del{width:30px;height:30px;border-radius:50%;margin-left:8px;color:var(--faint);font-size:14px;
   display:inline-flex;align-items:center;justify-content:center;flex:none}
 .del:active{background:#F3EDE5}
@@ -324,13 +328,31 @@ function stub(){
     '</div>';
 }
 
+/* ============ текущий месяц ============ */
+function nowInfo(){
+  var MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь',
+                'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  var MONTHS_IN = ['январе','феврале','марте','апреле','мае','июне',
+                   'июле','августе','сентябре','октябре','ноябре','декабре'];
+  var d = new Date();
+  return {
+    key: d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'),
+    label: MONTHS[d.getMonth()],
+    inLabel: MONTHS_IN[d.getMonth()],
+    day: d.getDate(),
+    days: new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()
+  };
+}
+function thisMonth(o){ return String(o.date || '').slice(0,7) === nowInfo().key; }
+function monthIn(){ return nowInfo().inLabel; }
+
 /* ============ расчёты ============ */
 function calc(){
   var ops = D.operations;
   var sum = function(f){ return r2(ops.filter(f).reduce(function(a,o){ return a + o.amount; }, 0)); };
 
-  var income   = sum(function(o){ return o.type === 'income'; });
-  var expense  = sum(function(o){ return o.type === 'expense'; });
+  var income   = sum(function(o){ return o.type === 'income'  && thisMonth(o); });
+  var expense  = sum(function(o){ return o.type === 'expense' && thisMonth(o); });
   var pending  = sum(function(o){ return o.type === 'pending' && o.status !== 'done'; });
   var toReturn = sum(function(o){ return o.type === 'work' && o.status !== 'done'; });
   var planned  = sum(function(o){ return o.type === 'planned' && o.status !== 'done'; });
@@ -350,7 +372,7 @@ function debts(){
   var list = (D.debts || []);
   var initial = r2(list.reduce(function(a,x){ return a + x.initial; }, 0));
   var left    = r2(list.reduce(function(a,x){ return a + x.remaining; }, 0));
-  var paidNow = r2(D.operations.filter(function(o){ return o.type === 'debt'; })
+  var paidNow = r2(D.operations.filter(function(o){ return o.type === 'debt' && thisMonth(o); })
                   .reduce(function(a,o){ return a + o.amount; }, 0));
   return { list:list, initial:initial, left:left,
            closed: r2(initial - left),
@@ -388,19 +410,22 @@ function tabBtn(id, name){
 function go(id){ tab = id; haptic(); render(); window.scrollTo(0,0); }
 
 function screenHome(c, M){
-  var pace = M.dayToday / M.daysTotal;
+  var N = nowInfo();
+  var pace = N.day / N.days;
   var incP = Math.min(c.income / M.incomePlan, 1);
   var expP = Math.min(c.expense / M.expenseLimit, 1);
-  var left = M.daysTotal - M.dayToday;
+  var left = N.days - N.day;
 
   return '<section class="screen ' + (tab==='home'?'on':'') + '">' +
-    '<div class="top"><span class="month">' + esc(M.label) + ' · осталось ' + left + ' ' + plural(left,'день','дня','дней') + '</span>' +
+    '<div class="top"><span class="month">' + N.label + ' · осталось ' + left + ' ' + plural(left,'день','дня','дней') + '</span>' +
       '<button class="icon-btn" onclick="openSettings()" aria-label="Настройки"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#14120F" stroke-width="1.7" stroke-linecap="round"><path d="M3 6h5M12 6h5M3 14h9M16 14h1"/><circle cx="10" cy="6" r="2" fill="#FFF"/><circle cx="14" cy="14" r="2" fill="#FFF"/></svg></button></div>' +
 
     '<div class="hero">' +
       '<div class="lbl">Свободно</div>' +
-      '<div class="sum">' + money(c.free) + '<span class="cur">' + CUR + '</span></div>' +
-      '<div class="meta">Без отложенного и запланированного</div>' +
+      '<div class="sum' + (c.free < 0 ? ' minus' : '') + '">' + money(c.free) + '<span class="cur">' + CUR + '</span></div>' +
+      '<div class="meta">' + (c.free < 0
+        ? 'Планы и цели превышают то, что есть на счетах'
+        : 'Без отложенного и запланированного') + '</div>' +
     '</div>' +
 
     '<div class="card calc">' +
@@ -457,13 +482,6 @@ function debtBlock(){
         '<span>' + (d.paidNow > 0 ? 'В ' + monthIn() + ' — ' + m(d.paidNow) : d.active + ' ' + plural(d.active,'долг','долга','долгов')) + '</span></div>' +
     '</button>';
 }
-function monthIn(){
-  var map = {'Январь':'январе','Февраль':'феврале','Март':'марте','Апрель':'апреле','Май':'мае',
-    'Июнь':'июне','Июль':'июле','Август':'августе','Сентябрь':'сентябре','Октябрь':'октябре',
-    'Ноябрь':'ноябре','Декабрь':'декабре'};
-  return map[D.month.label] || 'этом месяце';
-}
-
 function barLine(name, val, goal, color, pace, note){
   if (!goal) {
     return '<div class="line">' +
@@ -515,7 +533,9 @@ function screenHistory(){
 function delOp(id){
   var o = find(id); if (!o) return;
   if (o.type === 'income') D.accounts = r2(D.accounts - o.amount);
-  if (o.type === 'expense' || o.type === 'work' || o.type === 'debt') D.accounts = r2(D.accounts + o.amount);
+  if (o.type === 'expense' || o.type === 'debt') D.accounts = r2(D.accounts + o.amount);
+  /* рабочий расход: если возврат уже получен, баланс не трогаем — минус и плюс погасили друг друга */
+  if (o.type === 'work' && o.status !== 'done') D.accounts = r2(D.accounts + o.amount);
   if (o.type === 'debt' && o.debtId) {
     (D.debts||[]).forEach(function(x){ if (x.id === o.debtId) x.remaining = r2(Math.min(x.initial, x.remaining + o.amount)); });
   }
@@ -524,8 +544,8 @@ function delOp(id){
 }
 
 function screenStats(c){
-  var byCat = group(function(o){ return o.type==='expense'; }, 'category', c.expense);
-  var bySrc = group(function(o){ return o.type==='income';  }, 'source',   c.income);
+  var byCat = group(function(o){ return o.type==='expense' && thisMonth(o); }, 'category', c.expense);
+  var bySrc = group(function(o){ return o.type==='income'  && thisMonth(o); }, 'source',   c.income);
   return '<section class="screen ' + (tab==='stats'?'on':'') + '">' +
     '<h1 class="big" style="margin-top:20px">Аналитика</h1>' +
     '<div class="sect">Откуда доход</div>' +
@@ -542,7 +562,7 @@ function screenStats(c){
 
     '<div class="sect">Рабочие расходы</div>' +
     '<div class="card"><div class="row"><span><span class="t">Вернули</span>' +
-      '<span class="s">за ' + esc(D.month.label.toLowerCase()) + '</span></span>' +
+      '<span class="s">за ' + monthIn() + '</span></span>' +
       '<span class="v c-in">' + m(sumWork('done')) + '</span></div></div>' +
     '<div class="card"><div class="row"><span><span class="t">Ещё ждёшь</span>' +
       '<span class="s">' + c.returnCount + ' ' + plural(c.returnCount,'операция','операции','операций') + '</span></span>' +
@@ -579,13 +599,25 @@ function openSub(title, body){
 }
 function closeSub(){ document.getElementById('sub').classList.remove('on'); }
 
+function delWaiting(id, back){
+  var o = find(id); if (!o) return;
+  if (o.type === 'work') D.accounts = r2(D.accounts + o.amount);
+  D.operations = D.operations.filter(function(x){ return x.id !== id; });
+  haptic(); render();
+  if (back === 'pending') openPending();
+  else if (back === 'planned') openPlanned();
+  else openReturns();
+  toast('Удалено');
+}
+
 function openPending(){
   var list = D.operations.filter(function(o){ return o.type==='pending' && o.status!=='done'; })
     .sort(function(a,b){ return a.date > b.date ? 1 : -1; });
   var body = list.length ? list.map(function(o){
     return '<div class="card"><div class="row"><span><span class="t">' + esc(o.title) + '</span>' +
       '<span class="s">' + esc(o.source||'') + ' · до ' + dayLabel(o.date) + '</span></span>' +
-      '<span class="v c-wait">+' + m(o.amount) + '</span></div>' +
+      '<span class="val-wrap"><span class="v c-wait">+' + m(o.amount) + '</span>' +
+      '<button class="del" onclick="delWaiting(\'' + o.id + '\',\'pending\')" aria-label="Удалить">✕</button></span></div>' +
       '<button class="done-btn" onclick="markPaid(\'' + o.id + '\')">Деньги пришли</button></div>';
   }).join('') : '<div class="card"><div class="empty">Все выплаты получены.</div></div>';
   openSub('Ожидается', '<div style="margin-top:10px">' + body + '</div>');
@@ -597,7 +629,8 @@ function openReturns(){
   var body = list.length ? list.map(function(o){
     return '<div class="card"><div class="row"><span><span class="t">' + esc(o.title) + '</span>' +
       '<span class="s">' + esc(o.category||'') + ' · ' + dayLabel(o.date) + '</span></span>' +
-      '<span class="v c-back">' + m(o.amount) + '</span></div>' +
+      '<span class="val-wrap"><span class="v c-back">' + m(o.amount) + '</span>' +
+      '<button class="del" onclick="delWaiting(\'' + o.id + '\',\'work\')" aria-label="Удалить">✕</button></span></div>' +
       '<button class="done-btn" onclick="markReturned(\'' + o.id + '\')">Мне вернули</button></div>';
   }).join('') : '<div class="card"><div class="empty">Все рабочие расходы возвращены.</div></div>';
   openSub('Мне должны вернуть',
@@ -610,7 +643,8 @@ function openPlanned(){
   var body = list.length ? list.map(function(o){
     return '<div class="card"><div class="row"><span><span class="t">' + esc(o.title) + '</span>' +
       '<span class="s">' + esc(o.category||'') + ' · до ' + dayLabel(o.date) + '</span></span>' +
-      '<span class="v c-plan">' + m(o.amount) + '</span></div>' +
+      '<span class="val-wrap"><span class="v c-plan">' + m(o.amount) + '</span>' +
+      '<button class="del" onclick="delWaiting(\'' + o.id + '\',\'planned\')" aria-label="Удалить">✕</button></span></div>' +
       '<button class="done-btn" onclick="markSpent(\'' + o.id + '\')">Оплатила</button></div>';
   }).join('') : '<div class="card"><div class="empty">Запланированных трат нет.<br>Всё, что на счетах, свободно.</div></div>';
   openSub('Запланированные траты',
@@ -659,9 +693,19 @@ function openDebts(){
       '<div class="row"><span><span class="dname">' + esc(x.title) +
         (x.note ? '<span class="tag">' + esc(x.note) + '</span>' : '') + '</span>' +
         '<span class="dmeta">Было ' + m(x.initial) + ' · закрыто ' + Math.round(p*100) + '%</span></span>' +
-        '<span class="v">' + m(x.remaining) + '</span></div>' +
+        '<span class="val-wrap"><span class="v">' + m(x.remaining) + '</span>' +
+      '<button class="del" onclick="editDebt(\'' + x.id + '\')" aria-label="Изменить">✎</button>' +
+      '<button class="del" onclick="delDebt(\'' + x.id + '\')" aria-label="Удалить">✕</button></span></div>' +
       '<div class="bar"><i style="width:' + (p*100).toFixed(1) + '%;background:var(--in)"></i></div>' +
-      '<button class="done-btn" onclick="payDebt(\'' + x.id + '\')">Внести платёж</button></div>';
+      (editId === x.id
+        ? '<div class="flabel">Осталось выплатить</div>' +
+          '<div class="tinput soft"><input id="edSum" inputmode="decimal" value="' + x.remaining + '"></div>' +
+          '<div class="flabel">Пометка (например, «пеня» или «просрочка»)</div>' +
+          '<div class="tinput soft"><input id="edNote" value="' + esc(x.note||'') + '"></div>' +
+          '<button class="done-btn" onclick="saveDebt(\'' + x.id + '\')" style="background:var(--ink);color:#fff">Сохранить</button>' +
+          '<button class="ghost" onclick="editDebt(null)" style="margin-top:4px">Отмена</button>'
+        : '<button class="done-btn" onclick="payDebt(\'' + x.id + '\')">Внести платёж</button>') +
+      '</div>';
   }).join('');
 
   var form = newDebtOpen
@@ -672,6 +716,26 @@ function openDebts(){
     : '<button class="addbtn" onclick="toggleNewDebt()">+ Добавить долг</button>';
 
   openSub('Долги', '<div style="margin-top:10px">' + head + form + body + '</div>');
+}
+
+var editId = null;
+function editDebt(id){ editId = (editId === id) ? null : id; haptic(); openDebts(); }
+function saveDebt(id){
+  var a = document.getElementById('edSum'), n = document.getElementById('edNote');
+  var x = null;
+  (D.debts||[]).forEach(function(y){ if (y.id === id) x = y; });
+  if (!x) return;
+  var v = a ? parseMoney(a.value) : x.remaining;
+  x.remaining = v;
+  if (v > x.initial) x.initial = v;   /* пеня увеличила долг — поднимаем и исходную сумму */
+  x.note = n ? n.value.trim() : x.note;
+  editId = null;
+  haptic('medium'); render(); openDebts(); toast('Сохранено');
+}
+
+function delDebt(id){
+  D.debts = (D.debts||[]).filter(function(x){ return x.id !== id; });
+  haptic(); render(); openDebts(); toast('Долг удалён');
 }
 
 function payDebt(id){
@@ -691,19 +755,19 @@ function openSettings(){
   var M = D.month;
   var body =
     '<div class="card">' +
-      '<div class="flabel" style="margin-top:0">Месяц</div>' +
-      '<div class="tinput soft"><input id="stMonth" enterkeyhint="done" onkeydown="if(event.key===\'Enter\'){event.preventDefault();saveSettings();}" value="' + esc(M.label) + '"></div>' +
-      '<div class="flabel">Сколько сейчас на счетах</div>' +
+      '<div class="flabel" style="margin-top:0">Сколько сейчас на счетах</div>' +
       '<div class="tinput soft"><input id="stAcc" inputmode="decimal" enterkeyhint="done" onkeydown="if(event.key===\'Enter\'){event.preventDefault();saveSettings();}" value="' + D.accounts + '"></div>' +
       '<div class="flabel">План по доходу на месяц</div>' +
       '<div class="tinput soft"><input id="stPlan" inputmode="decimal" enterkeyhint="done" onkeydown="if(event.key===\'Enter\'){event.preventDefault();saveSettings();}" value="' + M.incomePlan + '"></div>' +
       '<div class="flabel">Лимит личных трат</div>' +
       '<div class="tinput soft"><input id="stLimit" inputmode="decimal" enterkeyhint="done" onkeydown="if(event.key===\'Enter\'){event.preventDefault();saveSettings();}" value="' + M.expenseLimit + '"></div>' +
       '<button class="done-btn" onclick="saveSettings()" style="background:var(--ink);color:#fff;margin-top:14px">Сохранить</button>' +
+      '<div class="tagline" style="margin-top:12px">План и лимит действуют каждый месяц. Первого числа счётчики обнулятся сами.</div>' +
     '</div>' +
 
     '<button class="addbtn" onclick="openReserves()" style="text-align:left;padding-left:17px">Отложенные деньги ›</button>' +
     '<button class="addbtn" onclick="openDebts()" style="text-align:left;padding-left:17px">Долги ›</button>' +
+    '<button class="addbtn" onclick="openExport()" style="text-align:left;padding-left:17px">Выгрузка и резервная копия ›</button>' +
 
     '<div class="tagline" style="margin:22px 2px 8px">Данные хранятся в твоём Telegram и видны только тебе.</div>' +
     '<button class="addbtn danger" onclick="armWipe()">' +
@@ -715,7 +779,6 @@ function openSettings(){
 function saveSettings(){
   var g = function(id){ var e = document.getElementById(id); return e ? e.value : ''; };
   var num = parseMoney;
-  D.month.label        = g('stMonth').trim() || D.month.label;
   D.accounts           = num(g('stAcc'));
   D.month.incomePlan   = num(g('stPlan')) || D.month.incomePlan;
   D.month.expenseLimit = num(g('stLimit')) || D.month.expenseLimit;
@@ -725,6 +788,182 @@ function saveSettings(){
 function armWipe(){
   if (!wipeArmed) { wipeArmed = true; openSettings(); return; }
   wipeState();
+}
+
+/* ============ выгрузка ============ */
+var expPeriod = 'this', restoreOpen = false;
+
+function monthKeyShift(n){
+  var d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + n);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+}
+function keyLabel(k){
+  var M = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  var p = k.split('-');
+  return M[parseInt(p[1],10)-1] + ' ' + p[0];
+}
+function ddmm(iso){ var p = String(iso).split('-'); return p.length<3 ? iso : p[2] + '.' + p[1]; }
+function plainMoney(n){ return money(n) + ' ₽'; }
+
+function buildReport(period){
+  var key = period === 'this' ? monthKeyShift(0) : (period === 'prev' ? monthKeyShift(-1) : null);
+  var inP = function(o){ return !key || String(o.date||'').slice(0,7) === key; };
+  var ops = D.operations.filter(inP);
+  var sumT = function(t){ return r2(ops.filter(function(o){ return o.type === t; })
+                           .reduce(function(a,o){ return a + o.amount; }, 0)); };
+
+  var inc = sumT('income'), exp = sumT('expense'), dbt = sumT('debt');
+  var wrk = sumT('work');
+  var L = [];
+  var title = key ? keyLabel(key) : 'всё время';
+  L.push('ФИНАНСЫ — ' + title.toUpperCase());
+  L.push('');
+
+  L.push('ИТОГО');
+  var planTxt = (key && D.month.incomePlan) ? ' (план ' + plainMoney(D.month.incomePlan) + ', ' + Math.round(inc / D.month.incomePlan * 100) + '%)' : '';
+  var limTxt  = (key && D.month.expenseLimit) ? ' (лимит ' + plainMoney(D.month.expenseLimit) + ', ' + Math.round(exp / D.month.expenseLimit * 100) + '%)' : '';
+  L.push('Доход: ' + plainMoney(inc) + planTxt);
+  L.push('Личные траты: ' + plainMoney(exp) + limTxt);
+  if (dbt) L.push('Платежи по долгам: ' + plainMoney(dbt));
+  if (wrk) {
+    var wrkWait = r2(ops.filter(function(o){ return o.type === 'work' && o.status !== 'done'; })
+                     .reduce(function(a,o){ return a + o.amount; }, 0));
+    L.push('Рабочие расходы: ' + plainMoney(wrk) + (wrkWait ? ', из них ждут возврата ' + plainMoney(wrkWait) : ', всё вернули'));
+  }
+  var c = calc();
+  L.push('На счетах сейчас: ' + plainMoney(c.accounts));
+  L.push('Свободно сейчас: ' + plainMoney(c.free));
+  L.push('');
+
+  var groupBy = function(t, field){
+    var map = {};
+    ops.filter(function(o){ return o.type === t; }).forEach(function(o){
+      var k = o[field] || 'Другое'; map[k] = r2((map[k]||0) + o.amount);
+    });
+    return Object.keys(map).sort(function(a,b){ return map[b]-map[a]; }).map(function(k){ return [k, map[k]]; });
+  };
+
+  var src = groupBy('income','source');
+  if (src.length) {
+    L.push('ДОХОДЫ ПО ИСТОЧНИКАМ');
+    src.forEach(function(x){ L.push('— ' + x[0] + ': ' + plainMoney(x[1]) + (inc ? ' (' + Math.round(x[1]/inc*100) + '%)' : '')); });
+    L.push('');
+  }
+  var cat = groupBy('expense','category');
+  if (cat.length) {
+    L.push('ТРАТЫ ПО КАТЕГОРИЯМ');
+    cat.forEach(function(x){ L.push('— ' + x[0] + ': ' + plainMoney(x[1]) + (exp ? ' (' + Math.round(x[1]/exp*100) + '%)' : '')); });
+    L.push('');
+  }
+
+  var names = { income:'Доход', expense:'Расход', work:'Рабочий расход', debt:'Платёж по долгу' };
+  var list = ops.filter(function(o){ return names[o.type]; })
+    .slice().sort(function(a,b){ return a.date > b.date ? 1 : -1; });
+  if (list.length) {
+    L.push('ВСЕ ОПЕРАЦИИ (дата · тип · категория · комментарий · сумма)');
+    list.forEach(function(o){
+      var sign = o.type === 'income' ? '+' : '−';
+      var extra = o.type === 'work' ? (o.status === 'done' ? ' [вернули]' : ' [ждёт возврата]') : '';
+      L.push(ddmm(o.date) + ' · ' + names[o.type] + ' · ' + (o.source || o.category || '—') + ' · ' +
+             (o.title || '—') + ' · ' + sign + plainMoney(o.amount) + extra);
+    });
+    L.push('');
+  }
+
+  var dd = debts();
+  if (dd.list.length) {
+    L.push('ДОЛГИ');
+    dd.list.forEach(function(x){
+      var p = x.initial ? Math.round((x.initial - x.remaining) / x.initial * 100) : 100;
+      L.push('— ' + x.title + ': осталось ' + plainMoney(x.remaining) + ' из ' + plainMoney(x.initial) +
+             ' (закрыто ' + p + '%)' + (x.note ? ' · ' + x.note : ''));
+    });
+    L.push('Всего осталось: ' + plainMoney(dd.left) + ', закрыто ' + Math.round(dd.share*100) + '%');
+    L.push('');
+  }
+
+  var waitList = function(t, head){
+    var w = D.operations.filter(function(o){ return o.type === t && o.status !== 'done'; });
+    if (!w.length) return;
+    L.push(head);
+    w.forEach(function(o){ L.push('— ' + ddmm(o.date) + ' · ' + (o.title||'—') + ' · ' + (o.source||o.category||'—') + ' · ' + plainMoney(o.amount)); });
+    L.push('');
+  };
+  waitList('pending', 'ЖДУ ЗАЧИСЛЕНИЯ');
+  waitList('planned', 'ЗАПЛАНИРОВАННЫЕ ТРАТЫ');
+
+  if ((D.reserves||[]).length) {
+    L.push('ОТЛОЖЕНО');
+    D.reserves.forEach(function(r){ L.push('— ' + r.title + ': ' + plainMoney(r.amount)); });
+    L.push('');
+  }
+  return L.join('\n').trim();
+}
+
+function openExport(){
+  var text = buildReport(expPeriod);
+  var chip = function(id, name){
+    return '<button class="chip ' + (expPeriod===id?'on':'') + '" onclick="setPeriod(\'' + id + '\')">' + name + '</button>';
+  };
+  var canShare = text.length <= 3500 && TG && TG.openTelegramLink;
+
+  var body =
+    '<div class="tagline" style="margin:8px 2px 10px">Отчёт с комментариями — удобно отдать ИИ на анализ.</div>' +
+    '<div class="chips" style="margin:0 0 12px">' + chip('this','Этот месяц') + chip('prev','Прошлый месяц') + chip('all','Всё время') + '</div>' +
+    '<div class="card" style="padding:12px"><textarea id="expText" readonly class="exp">' + esc(text) + '</textarea></div>' +
+    '<button class="done-btn" onclick="copyReport()" style="background:var(--ink);color:#fff;margin-top:12px;padding:15px">Скопировать отчёт</button>' +
+    (canShare
+      ? '<button class="done-btn" onclick="shareReport()" style="margin-top:8px;padding:15px">Отправить в чат Telegram</button>'
+      : '<div class="tagline" style="margin:8px 2px 0">Отчёт длинный для отправки ссылкой — скопируй и вставь в чат.</div>') +
+
+    '<div class="sect" style="margin-top:30px">Резервная копия</div>' +
+    '<div class="tagline" style="margin:0 2px 10px">Все данные одним текстом. Сохрани в «Избранное» в Telegram — если что-то случится, восстановишь из неё.</div>' +
+    '<button class="done-btn" onclick="copyBackup()" style="padding:15px">Скопировать резервную копию</button>' +
+    (restoreOpen
+      ? '<div class="card" style="margin-top:10px;padding:12px"><textarea id="restoreText" class="exp" style="height:140px" placeholder="Вставь сюда резервную копию"></textarea>' +
+        '<button class="done-btn" onclick="doRestore()" style="background:var(--ink);color:#fff">Восстановить</button>' +
+        '<div class="tagline" style="margin-top:8px">Текущие данные заменятся данными из копии.</div></div>'
+      : '<button class="addbtn" onclick="toggleRestore()" style="margin-top:8px">Восстановить из копии</button>');
+
+  openSub('Выгрузка', body);
+}
+function setPeriod(p){ expPeriod = p; haptic(); openExport(); }
+function toggleRestore(){ restoreOpen = !restoreOpen; openExport(); }
+
+function copyText(text, okMsg){
+  var done = function(){ haptic('medium'); toast(okMsg); };
+  var fallback = function(){
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly','');
+    ta.style.position = 'fixed'; ta.style.top = '-1000px';
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta);
+    if (ok) done(); else toast('Не вышло — выдели текст в поле и скопируй вручную');
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, fallback);
+  } else fallback();
+}
+function copyReport(){ copyText(buildReport(expPeriod), 'Отчёт скопирован — вставь в чат'); }
+function shareReport(){
+  var t = buildReport(expPeriod);
+  try { TG.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(t)); }
+  catch(e) { copyReport(); }
+}
+function copyBackup(){
+  copyText('MONEY-BACKUP ' + JSON.stringify(D), 'Копия скопирована — сохрани в «Избранное»');
+}
+function doRestore(){
+  var el = document.getElementById('restoreText');
+  var raw = el ? el.value.trim() : '';
+  raw = raw.replace(/^MONEY-BACKUP\s*/, '');
+  var obj = null;
+  try { obj = JSON.parse(raw); } catch(e) {}
+  if (!obj || !obj.operations || !obj.month) { toast('Это не похоже на резервную копию'); return; }
+  D = obj; CUR = D.currency || '₽'; restoreOpen = false;
+  haptic('medium'); render(); toast('Данные восстановлены');
 }
 
 function openReserves(){
