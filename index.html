@@ -369,7 +369,8 @@ function calc(){
     pendingCount:  ops.filter(function(o){ return o.type==='pending' && o.status!=='done'; }).length,
     returnCount:   ops.filter(function(o){ return o.type==='work'    && o.status!=='done'; }).length,
     accounts: r2(D.accounts),
-    free: r2(D.accounts - reserved - planned)
+    free: forecast().min,
+    holdback: r2(forecast().start - forecast().min)
   };
 }
 /* Раскладываем ожидаемые поступления и запланированные траты по календарю.
@@ -379,23 +380,32 @@ function forecast(){
   var t = today();
   var reserved = r2((D.reserves||[]).reduce(function(a,r){ return a + r.amount; }, 0));
   var start = r2(D.accounts - reserved);
-  var ev = D.operations.filter(function(o){
-      return (o.type === 'pending' || o.type === 'planned') && o.status !== 'done';
-    }).map(function(o){
-      return { date: (o.date && o.date > t) ? o.date : t,
-               delta: o.type === 'pending' ? o.amount : -o.amount,
-               o: o };
-    }).sort(function(a,b){
-      if (a.date !== b.date) return a.date > b.date ? 1 : -1;
-      return b.delta - a.delta;
-    });
+
+  /* поступление, у которого дата прошла, а деньги не отмечены, — не учитываем:
+     рассчитывать на него нельзя, пока ты не подтвердишь или не перенесёшь дату */
+  var late = [];
+  var ev = [];
+  D.operations.forEach(function(o){
+    if (o.status === 'done') return;
+    if (o.type === 'pending') {
+      if (o.date && o.date < t) { late.push(o); return; }
+      ev.push({ date: o.date || t, delta: o.amount, o: o });
+    } else if (o.type === 'planned') {
+      ev.push({ date: (o.date && o.date > t) ? o.date : t, delta: -o.amount, o: o });
+    }
+  });
+  ev.sort(function(a,b){
+    if (a.date !== b.date) return a.date > b.date ? 1 : -1;
+    return b.delta - a.delta;   /* в один день сначала поступление */
+  });
+
   var run = start, min = start, minDate = t, firstIn = null;
   ev.forEach(function(e){
     run = r2(run + e.delta);
     if (e.delta > 0 && !firstIn) firstIn = e;
     if (run < min) { min = run; minDate = e.date; }
   });
-  return { start:start, end:run, min:min, minDate:minDate, events:ev, firstIn:firstIn };
+  return { start:start, end:run, min:r2(min), minDate:minDate, events:ev, firstIn:firstIn, late:late };
 }
 
 function debts(){
@@ -456,8 +466,9 @@ function screenHome(c, M){
       '<div class="r"><span>На счетах</span><span class="v">' + m(c.accounts) + '</span></div>' +
       '<button class="r" onclick="openReserves()"><span>Отложено</span>' +
         '<span class="g"><span class="v">− ' + m(c.reserved) + '</span><span class="chev">›</span></span></button>' +
-      '<button class="r" onclick="openPlanned()"><span>Запланированные траты</span>' +
-        '<span class="g"><span class="v">− ' + m(c.planned) + '</span><span class="chev">›</span></span></button>' +
+      '<button class="r" onclick="openPlanned()"><span><span class="t2" style="font-weight:400;font-size:14.5px">Запланированные траты</span>' +
+        (c.planned ? '<span class="s2">' + plannedNote(c) + '</span>' : '') + '</span>' +
+        '<span class="g"><span class="v">− ' + m(c.holdback) + '</span><span class="chev">›</span></span></button>' +
     '</div>' +
 
     upcomingBlock() +
@@ -489,20 +500,34 @@ function screenHome(c, M){
   '</section>';
 }
 
+function plannedNote(c){
+  var f = forecast();
+  if (!c.planned) return '';
+  if (c.holdback <= 0) {
+    return 'Всего ' + m(c.planned) + ' — покроются поступлениями';
+  }
+  if (c.holdback >= c.planned) {
+    return 'Всего ' + m(c.planned) + ' — платить из текущих денег';
+  }
+  return 'Всего ' + m(c.planned) + ' — из текущих денег ' + m(c.holdback);
+}
+
 function heroBlock(c){
   var f = forecast();
-  var danger = f.min < 0;
+  var danger = c.free < 0;
   var meta;
-  if (danger) {
+  if (f.late.length) {
+    var l = f.late[0];
+    meta = '<span class="c-out">Не пришло ' + m(l.o ? l.o.amount : l.amount) + ' (' + esc(l.title) +
+           ', ждали ' + dayLabel(l.date) + ') — отметь или перенеси дату</span>';
+  } else if (danger) {
+    var hasIn = f.events.some(function(e){ return e.delta > 0; });
     meta = '<span class="c-out">' + dayLabel(f.minDate) + ' не хватит ' + m(-f.min) +
-           ' — платёж раньше, чем поступление</span>';
-  } else if (c.free < 0) {
-    meta = 'По датам хватает: ' + (f.firstIn ? dayLabel(f.firstIn.date) + ' придёт ' + m(f.firstIn.o.amount) + '. ' : '') +
-           'После всех платежей останется <b>' + m(f.end) + '</b>';
+           (hasIn ? ' — платёж раньше, чем поступление' : ' на запланированные траты') + '</span>';
   } else if (f.end > c.free) {
-    meta = 'С учётом ожидаемых поступлений — <b>' + m(f.end) + '</b>';
+    meta = 'Можно тратить, не задевая отложенное и платежи. После всех поступлений будет <b>' + m(f.end) + '</b>';
   } else {
-    meta = 'Без отложенного и запланированного';
+    meta = 'Можно тратить, не задевая отложенное и платежи';
   }
   return '<div class="hero">' +
       '<div class="lbl">Свободно сейчас</div>' +
@@ -513,7 +538,12 @@ function heroBlock(c){
 
 function upcomingBlock(){
   var f = forecast();
-  if (!f.events.length) return '';
+  var lateRows = f.late.map(function(o){
+    return '<button class="r" onclick="openPending()">' +
+      '<span><span class="t2">' + esc(o.title) + '</span><span class="s2 c-out">не пришло · ждали ' + dayLabel(o.date) + '</span></span>' +
+      '<span class="v c-wait" style="opacity:.55">+' + m(o.amount) + '</span></button>';
+  }).join('');
+  if (!f.events.length && !lateRows) return '';
   var t = today();
   var rows = f.events.slice(0, 4).map(function(e){
     var o = e.o, late = o.date && o.date < t;
@@ -524,7 +554,7 @@ function upcomingBlock(){
       '<span class="v ' + (plus ? 'c-wait' : 'c-plan') + '">' + (plus ? '+' : '−') + m(o.amount) + '</span></button>';
   }).join('');
   var more = f.events.length > 4 ? '<div class="tagline" style="padding:10px 0 12px">и ещё ' + (f.events.length - 4) + '</div>' : '';
-  return '<div class="sect">Ближайшее</div><div class="card calc">' + rows + more + '</div>';
+  return '<div class="sect">Ближайшее</div><div class="card calc">' + lateRows + rows + more + '</div>';
 }
 
 function debtBlock(){
