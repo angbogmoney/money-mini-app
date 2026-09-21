@@ -68,6 +68,10 @@ h1.big{font-size:27px;font-weight:800;letter-spacing:-.4px;margin:6px 0 18px}
 .calc .r:last-child{border-bottom:0}
 .calc .r .v{font-weight:600;white-space:nowrap}
 .calc .r .g{display:flex;align-items:center}
+.calc .t2{display:block;font-size:14.5px;font-weight:600}
+.calc .s2{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.hero .meta b{font-weight:700;color:var(--ink)}
+input.dateinp{border:0;background:#F7F3ED;border-radius:10px;padding:5px 9px;font:inherit;font-size:13px;color:var(--ink);-webkit-appearance:none}
 
 .row{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left}
 .row .t{display:block;font-size:15.5px;font-weight:600}
@@ -224,7 +228,7 @@ function money(n){
   return v.toLocaleString('ru-RU', {
     minimumFractionDigits: cents ? 2 : 0,
     maximumFractionDigits: 2
-  }).replace(/\u00A0/g, ' ');
+  }).replace(/\u00A0/g, ' ').replace(/^-/, '−');
 }
 function parseMoney(v){
   var s = String(v).replace(/\s/g,'').replace(',', '.').replace(/[^\d.]/g,'');
@@ -368,6 +372,32 @@ function calc(){
     free: r2(D.accounts - reserved - planned)
   };
 }
+/* Раскладываем ожидаемые поступления и запланированные траты по календарю.
+   Старт — деньги на счетах минус отложенное. Просроченное считаем «сегодня».
+   В один день сначала поступление, потом платёж.                          */
+function forecast(){
+  var t = today();
+  var reserved = r2((D.reserves||[]).reduce(function(a,r){ return a + r.amount; }, 0));
+  var start = r2(D.accounts - reserved);
+  var ev = D.operations.filter(function(o){
+      return (o.type === 'pending' || o.type === 'planned') && o.status !== 'done';
+    }).map(function(o){
+      return { date: (o.date && o.date > t) ? o.date : t,
+               delta: o.type === 'pending' ? o.amount : -o.amount,
+               o: o };
+    }).sort(function(a,b){
+      if (a.date !== b.date) return a.date > b.date ? 1 : -1;
+      return b.delta - a.delta;
+    });
+  var run = start, min = start, minDate = t, firstIn = null;
+  ev.forEach(function(e){
+    run = r2(run + e.delta);
+    if (e.delta > 0 && !firstIn) firstIn = e;
+    if (run < min) { min = run; minDate = e.date; }
+  });
+  return { start:start, end:run, min:min, minDate:minDate, events:ev, firstIn:firstIn };
+}
+
 function debts(){
   var list = (D.debts || []);
   var initial = r2(list.reduce(function(a,x){ return a + x.initial; }, 0));
@@ -420,13 +450,7 @@ function screenHome(c, M){
     '<div class="top"><span class="month">' + N.label + ' · осталось ' + left + ' ' + plural(left,'день','дня','дней') + '</span>' +
       '<button class="icon-btn" onclick="openSettings()" aria-label="Настройки"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#14120F" stroke-width="1.7" stroke-linecap="round"><path d="M3 6h5M12 6h5M3 14h9M16 14h1"/><circle cx="10" cy="6" r="2" fill="#FFF"/><circle cx="14" cy="14" r="2" fill="#FFF"/></svg></button></div>' +
 
-    '<div class="hero">' +
-      '<div class="lbl">Свободно</div>' +
-      '<div class="sum' + (c.free < 0 ? ' minus' : '') + '">' + money(c.free) + '<span class="cur">' + CUR + '</span></div>' +
-      '<div class="meta">' + (c.free < 0
-        ? 'Планы и цели превышают то, что есть на счетах'
-        : 'Без отложенного и запланированного') + '</div>' +
-    '</div>' +
+    heroBlock(c) +
 
     '<div class="card calc">' +
       '<div class="r"><span>На счетах</span><span class="v">' + m(c.accounts) + '</span></div>' +
@@ -436,6 +460,7 @@ function screenHome(c, M){
         '<span class="g"><span class="v">− ' + m(c.planned) + '</span><span class="chev">›</span></span></button>' +
     '</div>' +
 
+    upcomingBlock() +
     debtBlock() +
 
     '<div class="sect">Ждут зачисления</div>' +
@@ -462,6 +487,44 @@ function screenHome(c, M){
     '<div class="sect">Последние операции<button class="link" onclick="go(\'history\')">Все</button></div>' +
     '<div class="card">' + opsList(recent(4)) + '</div>' +
   '</section>';
+}
+
+function heroBlock(c){
+  var f = forecast();
+  var danger = f.min < 0;
+  var meta;
+  if (danger) {
+    meta = '<span class="c-out">' + dayLabel(f.minDate) + ' не хватит ' + m(-f.min) +
+           ' — платёж раньше, чем поступление</span>';
+  } else if (c.free < 0) {
+    meta = 'По датам хватает: ' + (f.firstIn ? dayLabel(f.firstIn.date) + ' придёт ' + m(f.firstIn.o.amount) + '. ' : '') +
+           'После всех платежей останется <b>' + m(f.end) + '</b>';
+  } else if (f.end > c.free) {
+    meta = 'С учётом ожидаемых поступлений — <b>' + m(f.end) + '</b>';
+  } else {
+    meta = 'Без отложенного и запланированного';
+  }
+  return '<div class="hero">' +
+      '<div class="lbl">Свободно сейчас</div>' +
+      '<div class="sum' + (danger ? ' minus' : '') + '">' + money(c.free) + '<span class="cur">' + CUR + '</span></div>' +
+      '<div class="meta">' + meta + '</div>' +
+    '</div>';
+}
+
+function upcomingBlock(){
+  var f = forecast();
+  if (!f.events.length) return '';
+  var t = today();
+  var rows = f.events.slice(0, 4).map(function(e){
+    var o = e.o, late = o.date && o.date < t;
+    var when = late ? '<span class="c-out">просрочено</span>' : dayLabel(e.date);
+    var plus = e.delta > 0;
+    return '<button class="r" onclick="' + (plus ? 'openPending()' : 'openPlanned()') + '">' +
+      '<span><span class="t2">' + esc(o.title) + '</span><span class="s2">' + when + '</span></span>' +
+      '<span class="v ' + (plus ? 'c-wait' : 'c-plan') + '">' + (plus ? '+' : '−') + m(o.amount) + '</span></button>';
+  }).join('');
+  var more = f.events.length > 4 ? '<div class="tagline" style="padding:10px 0 12px">и ещё ' + (f.events.length - 4) + '</div>' : '';
+  return '<div class="sect">Ближайшее</div><div class="card calc">' + rows + more + '</div>';
 }
 
 function debtBlock(){
@@ -610,14 +673,27 @@ function delWaiting(id, back){
   toast('Удалено');
 }
 
+function dateRow(o, label, back){
+  return '<div class="row" style="margin-top:10px"><span class="s" style="margin:0">' + label + '</span>' +
+    '<input type="date" class="dateinp" value="' + esc(o.date||today()) + '" ' +
+    'onchange="setOpDate(\'' + o.id + '\', this.value, \'' + back + '\')"></div>';
+}
+function setOpDate(id, v, back){
+  var o = find(id); if (!o || !v) return;
+  o.date = v; haptic(); render();
+  if (back === 'pending') openPending(); else openPlanned();
+  toast('Дата: ' + dayLabel(v));
+}
+
 function openPending(){
   var list = D.operations.filter(function(o){ return o.type==='pending' && o.status!=='done'; })
     .sort(function(a,b){ return a.date > b.date ? 1 : -1; });
   var body = list.length ? list.map(function(o){
     return '<div class="card"><div class="row"><span><span class="t">' + esc(o.title) + '</span>' +
-      '<span class="s">' + esc(o.source||'') + ' · до ' + dayLabel(o.date) + '</span></span>' +
+      '<span class="s">' + esc(o.source||'') + (o.date < today() ? ' · <span class="c-out">просрочено</span>' : '') + '</span></span>' +
       '<span class="val-wrap"><span class="v c-wait">+' + m(o.amount) + '</span>' +
       '<button class="del" onclick="delWaiting(\'' + o.id + '\',\'pending\')" aria-label="Удалить">✕</button></span></div>' +
+      dateRow(o, 'Когда придут', 'pending') +
       '<button class="done-btn" onclick="markPaid(\'' + o.id + '\')">Деньги пришли</button></div>';
   }).join('') : '<div class="card"><div class="empty">Все выплаты получены.</div></div>';
   openSub('Ожидается', '<div style="margin-top:10px">' + body + '</div>');
@@ -642,13 +718,14 @@ function openPlanned(){
     .sort(function(a,b){ return a.date > b.date ? 1 : -1; });
   var body = list.length ? list.map(function(o){
     return '<div class="card"><div class="row"><span><span class="t">' + esc(o.title) + '</span>' +
-      '<span class="s">' + esc(o.category||'') + ' · до ' + dayLabel(o.date) + '</span></span>' +
+      '<span class="s">' + esc(o.category||'') + (o.date < today() ? ' · <span class="c-out">просрочено</span>' : '') + '</span></span>' +
       '<span class="val-wrap"><span class="v c-plan">' + m(o.amount) + '</span>' +
       '<button class="del" onclick="delWaiting(\'' + o.id + '\',\'planned\')" aria-label="Удалить">✕</button></span></div>' +
+      dateRow(o, 'Когда платить', 'planned') +
       '<button class="done-btn" onclick="markSpent(\'' + o.id + '\')">Оплатила</button></div>';
   }).join('') : '<div class="card"><div class="empty">Запланированных трат нет.<br>Всё, что на счетах, свободно.</div></div>';
   openSub('Запланированные траты',
-    '<div class="tagline" style="margin:8px 2px 10px">Деньги ещё на счёте, но уже расписаны.</div>' + body);
+    '<div class="tagline" style="margin:8px 2px 10px">Деньги ещё на счёте, но уже расписаны. Укажи дату — приложение проверит, хватит ли денег к этому дню.</div>' + body);
 }
 
 function markSpent(id){
@@ -742,7 +819,7 @@ function payDebt(id){
   var x = null;
   (D.debts||[]).forEach(function(y){ if (y.id === id) x = y; });
   if (!x) return;
-  draft = { type:'debt', debtId:id, amount:'', title:'Платёж: ' + x.title, tag:'Долги', newTag:false };
+  draft = { type:'debt', debtId:id, amount:'', title:'Платёж: ' + x.title, tag:'Долги', newTag:false, date:today() };
   drawSheet();
   document.getElementById('scrim').classList.add('on');
   document.getElementById('sheet').classList.add('on');
@@ -1033,7 +1110,7 @@ var TYPES = {
 };
 
 function openSheet(){
-  draft = { type:null, amount:'', title:'', tag:'', debtId:null, newTag:false };
+  draft = { type:null, amount:'', title:'', tag:'', debtId:null, newTag:false, date:today() };
   drawSheet();
   document.getElementById('scrim').classList.add('on');
   document.getElementById('sheet').classList.add('on');
@@ -1077,6 +1154,8 @@ function stepAmount(){
     '</div>' +
     '<div class="tinput"><input id="ttl" placeholder="' + t.hint + '" value="' + esc(draft.title) + '" oninput="draft.title=this.value"></div>' +
     tagBlock(t) +
+    '<div class="flabel">' + (draft.type==='pending' ? 'Когда придут' : (draft.type==='planned' ? 'Когда платить' : 'Дата')) + '</div>' +
+    '<div class="tinput"><input type="date" id="dt" value="' + esc(draft.date || today()) + '" onchange="draft.date=this.value"></div>' +
     '<button class="cta" id="save" onclick="save()" ' + (canSave() ? '' : 'disabled') + '>Готово</button>' +
     '<button class="ghost" onclick="back()">Назад</button>';
 }
@@ -1152,14 +1231,14 @@ function usePreset(id){
   var p = null;
   (D.presets||[]).forEach(function(x){ if (x.id===id) p = x; });
   if (!p) return;
-  draft = { type:p.type, amount:String(p.amount), title:p.title, tag:p.source || p.category || '', debtId:null, newTag:false };
+  draft = { type:p.type, amount:String(p.amount), title:p.title, tag:p.source || p.category || '', debtId:null, newTag:false, date:today() };
   haptic(); drawSheet();
 }
 function save(){
   var amount = parseMoney(draft.amount);
   if (!amount) return;
   var t = TYPES[draft.type];
-  var op = { id:'n'+Date.now(), type:draft.type, amount:amount, date:today(),
+  var op = { id:'n'+Date.now(), type:draft.type, amount:amount, date:draft.date || today(),
              title: draft.title || t.name };
   if (t.tags === 'sources') op.source = draft.tag || 'Другое';
   else op.category = draft.tag || 'Другое';
